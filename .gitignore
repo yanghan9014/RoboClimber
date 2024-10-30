@@ -1,0 +1,53 @@
+# Python cache files
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.pyc
+*.pyd
+
+# Virtual environments
+venv/
+*.env
+
+# Python packaging
+*.egg
+*.egg-info/
+dist/
+build/
+*.whl
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints
+
+# IDE settings
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+*.zip
+
+# Operating system files
+.DS_Store
+Thumbs.db
+
+# MuJoCo generated files
+*.mjb  # Compiled MuJoCo models
+*.stl  # Mesh files if any
+
+# Logs and temporary files
+*.log
+*.out
+*.err
+*.pid
+*.temp
+
+# MuJoCo-related files
+mjkey.txt  # MuJoCo license key (do not share publicly)
+
+# Gymnasium/MuJoCo model assets
+# assets/*.xml  # XML model files if modifying MuJoCo XMLs
+models/
+
+# Videos
+videos/
