@@ -47,7 +47,6 @@ mjkey.txt  # MuJoCo license key (do not share publicly)
 
 # Gymnasium/MuJoCo model assets
 # assets/*.xml  # XML model files if modifying MuJoCo XMLs
-models/
 
 # Videos
 videos/
