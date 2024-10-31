@@ -27,6 +27,10 @@ The action space is a `Box(-0.4, 0.4, (17,), float32)`. An action represents the
 | 14  | Torque applied on the rotor between the torso and left upper arm (coordinate -1)   | -0.4        | 0.4         | left_shoulder1                   | hinge | torque (N m) |
 | 15  | Torque applied on the rotor between the torso and left upper arm (coordinate -2)   | -0.4        | 0.4         | left_shoulder2                   | hinge | torque (N m) |
 | 16  | Torque applied on the rotor between the left upper arm and left lower arm          | -0.4        | 0.4         | left_elbow                       | hinge | torque (N m) |
+| 17*  | Torque applied on the rotor between the left shin and left foot          | TBD        | TBD         | left_ankle                       | hinge | torque (N m) |
+| 18*  | Torque applied on the rotor between the right shin and right foot          | TBD        | TBD         | right_ankle                       | hinge | torque (N m) |
+
+*not implemented yet
 
 ## Observation Space
 The observation space consists of the following parts (in order)
