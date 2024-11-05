@@ -50,3 +50,6 @@ mjkey.txt  # MuJoCo license key (do not share publicly)
 
 # Videos
 videos/
+
+# venv
+robo
