@@ -1,6 +1,6 @@
+import numpy as np
 import gymnasium as gym
 from gymnasium.envs.mujoco.humanoid_v5 import HumanoidEnv
-import numpy as np
 import pdb
 
 class Climber(HumanoidEnv):

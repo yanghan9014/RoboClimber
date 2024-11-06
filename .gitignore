@@ -34,6 +34,7 @@ Thumbs.db
 # MuJoCo generated files
 *.mjb  # Compiled MuJoCo models
 *.stl  # Mesh files if any
+*.mtl
 
 # Logs and temporary files
 *.log
