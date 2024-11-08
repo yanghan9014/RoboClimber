@@ -1,11 +1,9 @@
-import numpy as np
-import gymnasium as gym
 from gymnasium.envs.mujoco.humanoid_v5 import HumanoidEnv
-import pdb
+
 
 class Climber(HumanoidEnv):
     def __init__(self, xml_file=None, **kwargs):
-        render_mode = kwargs.get('render_mode', 'rgb_array')
+        render_mode = kwargs.get("render_mode", "rgb_array")
         if xml_file is not None:
             super().__init__(xml_file=xml_file, render_mode=render_mode)
         else:
@@ -13,15 +11,15 @@ class Climber(HumanoidEnv):
 
     # def step(self, action):
     #     obs, reward, done, truncated, info = super().step(action)
-        
+
     #     # Customize the reward if needed
     #     # For example, adding a custom reward for maintaining an upright position
     #     upright_bonus = np.clip(self.data.qpos[2], 1.0, 1.2)
     #     reward += upright_bonus
-        
+
     #     # Optional: customize the done condition
     #     done = done or (self.data.qpos[2] < 1.0)  # Done if humanoid falls
-        
+
     #     return obs, reward, done, truncated, info
 
     # def reset(self):
@@ -31,7 +29,8 @@ class Climber(HumanoidEnv):
     def render(self):
         return super().render()
 
-'''
+
+"""
 # example
 class LunarLander(gym.Env):
     metadata = {
@@ -215,7 +214,8 @@ class LunarLander(gym.Env):
             ox =  tip[0]*(4/SCALE + 2*dispersion[0]) + side[0]*dispersion[1]   # 4 is move a bit downwards, +-2 for randomness
             oy = -tip[1]*(4/SCALE + 2*dispersion[0]) - side[1]*dispersion[1]
             impulse_pos = (self.lander.position[0] + ox, self.lander.position[1] + oy)
-            p = self._create_particle(3.5, impulse_pos[0], impulse_pos[1], m_power)    # particles are just a decoration, 3.5 is here to make particle speed adequate
+            # particles are just a decoration, 3.5 is here to make particle speed adequate
+            p = self._create_particle(3.5, impulse_pos[0], impulse_pos[1], m_power)
             p.ApplyLinearImpulse(           ( ox*MAIN_ENGINE_POWER*m_power,  oy*MAIN_ENGINE_POWER*m_power), impulse_pos, True)
             self.lander.ApplyLinearImpulse( (-ox*MAIN_ENGINE_POWER*m_power, -oy*MAIN_ENGINE_POWER*m_power), impulse_pos, True)
 
@@ -227,7 +227,8 @@ class LunarLander(gym.Env):
             assert s_power>=0.5 and s_power <= 1.0
             ox =  tip[0]*dispersion[0] + side[0]*(3*dispersion[1]+direction*SIDE_ENGINE_AWAY/SCALE)
             oy = -tip[1]*dispersion[0] - side[1]*(3*dispersion[1]+direction*SIDE_ENGINE_AWAY/SCALE)
-            impulse_pos = (self.lander.position[0] + ox - tip[0]*17/SCALE, self.lander.position[1] + oy + tip[1]*SIDE_ENGINE_HEIGHT/SCALE)
+            impulse_pos = (self.lander.position[0] + ox - tip[0]*17/SCALE, \
+                           self.lander.position[1] + oy + tip[1]*SIDE_ENGINE_HEIGHT/SCALE)
             p = self._create_particle(0.7, impulse_pos[0], impulse_pos[1], s_power)
             p.ApplyLinearImpulse(           ( ox*SIDE_ENGINE_POWER*s_power,  oy*SIDE_ENGINE_POWER*s_power), impulse_pos, True)
             self.lander.ApplyLinearImpulse( (-ox*SIDE_ENGINE_POWER*s_power, -oy*SIDE_ENGINE_POWER*s_power), impulse_pos, True)
@@ -334,7 +335,9 @@ class LunarLander(gym.Env):
             self.viewer.draw_polygon( [(x, flagy2), (x, flagy2-10/SCALE), (x+25/SCALE, flagy2-5/SCALE)], color=(0.8,0.8,0) )
 
         clock_prog = self.curr_step / MAX_NUM_STEPS
-        self.viewer.draw_polyline( [(0, 0.05*VIEWPORT_H/SCALE), (clock_prog*VIEWPORT_W/SCALE, 0.05*VIEWPORT_H/SCALE)], color=(255,0,0), linewidth=5  )
+        self.viewer.draw_polyline( [(0, 0.05*VIEWPORT_H/SCALE),
+                                    (clock_prog*VIEWPORT_W/SCALE, 0.05*VIEWPORT_H/SCALE)],
+                                    color=(255,0,0), linewidth=5  )
 
         return self.viewer.render(return_rgb_array = mode=='rgb_array')
 
@@ -389,4 +392,4 @@ if __name__=="__main__":
             print("step {} total_reward {:+0.2f}".format(steps, total_reward))
         steps += 1
         if done: break
-'''
+"""

@@ -1,17 +1,14 @@
-from collections import OrderedDict
-import pickle
-import os
-import sys
 import time
+from collections import OrderedDict
 
 import gymnasium as gym
-from gymnasium import wrappers
 import numpy as np
 import torch
-from climb.infrastructure import pytorch_util as ptu
-from climb.infrastructure.utils import sample_trajectory, sample_trajectories, sample_n_trajectories
-from climb.infrastructure.logger import Logger
 from climb.envs.envs_utils import register_custom_envs
+from climb.infrastructure import pytorch_util as ptu
+from climb.infrastructure.logger import Logger
+from climb.infrastructure.utils import sample_trajectories
+
 
 class RL_Trainer(object):
     def __init__(self, params):
@@ -19,39 +16,40 @@ class RL_Trainer(object):
         ## INIT
         #############
         self.params = params
-        self.logger = Logger(self.params['logdir'])
+        self.logger = Logger(self.params["logdir"])
 
-        seed = self.params['seed']
+        seed = self.params["seed"]
         np.random.seed(seed)
         torch.manual_seed(seed)
-        ptu.init_gpu(
-            use_gpu=not self.params['no_gpu'],
-            gpu_id=self.params['which_gpu']
-        )
+        ptu.init_gpu(use_gpu=not self.params["no_gpu"], gpu_id=self.params["which_gpu"])
 
         #############
         ## ENV
         #############
-        register_custom_envs(self.params['env_name'])
-        self.env = gym.make(self.params['env_name'])
+        register_custom_envs(self.params["env_name"])
+        self.env = gym.make(self.params["env_name"])
         # Maximum length for episodes
-        self.params['ep_len'] = self.params['ep_len'] or self.env.spec.max_episode_steps
+        self.params["ep_len"] = self.params["ep_len"] or self.env.spec.max_episode_steps
         discrete = isinstance(self.env.action_space, gym.spaces.Discrete)
-        self.params['agent_params']['discrete'] = discrete
+        self.params["agent_params"]["discrete"] = discrete
 
         # Are the observations images?
         img = len(self.env.observation_space.shape) > 2
 
-        ob_dim = self.env.observation_space.shape if img else self.env.observation_space.shape[0]
+        ob_dim = (
+            self.env.observation_space.shape
+            if img
+            else self.env.observation_space.shape[0]
+        )
         ac_dim = self.env.action_space.n if discrete else self.env.action_space.shape[0]
-        self.params['agent_params']['ac_dim'] = ac_dim
-        self.params['agent_params']['ob_dim'] = ob_dim
+        self.params["agent_params"]["ac_dim"] = ac_dim
+        self.params["agent_params"]["ob_dim"] = ob_dim
 
         #############
         ## AGENT
         #############
-        agent_class = self.params['agent_class']
-        self.agent = agent_class(self.env, self.params['agent_params'])
+        agent_class = self.params["agent_class"]
+        self.agent = agent_class(self.env, self.params["agent_params"])
 
     def run_training_loop(self, n_iter, collect_policy, eval_policy):
         """
@@ -65,22 +63,21 @@ class RL_Trainer(object):
         print_period = 1000
         for itr in range(n_iter + 1):
             if itr % print_period == 0:
-                print("\n\n********** Iteration %i ************"%itr)
+                print("\n\n********** Iteration %i ************" % itr)
 
             # decide if metrics should be logged
-            if self.params['scalar_log_freq'] == -1:
+            if self.params["scalar_log_freq"] == -1:
                 self.logmetrics = False
-            elif itr % self.params['scalar_log_freq'] == 0:
+            elif itr % self.params["scalar_log_freq"] == 0:
                 self.logmetrics = True
             else:
                 self.logmetrics = False
 
-            use_batchsize = self.params['batch_size']
-            if itr==0:
-                use_batchsize = self.params['batch_size_initial']
-            paths, envsteps_this_batch = (
-                self.collect_training_trajectories(
-                    itr, collect_policy, use_batchsize)
+            use_batchsize = self.params["batch_size"]
+            if itr == 0:
+                use_batchsize = self.params["batch_size_initial"]
+            paths, envsteps_this_batch = self.collect_training_trajectories(
+                itr, collect_policy, use_batchsize
             )
 
             self.total_envsteps += envsteps_this_batch
@@ -91,11 +88,14 @@ class RL_Trainer(object):
             # train agent (using sampled data from replay buffer)
             if itr % print_period == 0:
                 print("\nTraining agent...")
-            all_logs = self.train_agent() 
+            all_logs = self.train_agent()
             if self.logmetrics:
                 self.perform_logging(itr, paths, eval_policy, all_logs)
-                if self.params['save_params']:
-                    self.agent.save('{}/agent_itr_{}.pt'.format(self.params['logdir'], itr))
+                if self.params["save_params"]:
+                    self.agent.save(
+                        "{}/agent_itr_{}.pt".format(self.params["logdir"], itr)
+                    )
+
     ####################################
     ####################################
 
@@ -109,18 +109,19 @@ class RL_Trainer(object):
         """
         # print('Collecting train data...')
         paths, envsteps_this_batch = sample_trajectories(
-            self.env,
-            collect_policy,
-            batch_size,
-            self.params['ep_len']
+            self.env, collect_policy, batch_size, self.params["ep_len"]
         )
         return paths, envsteps_this_batch
 
     def train_agent(self):
         all_logs = []
-        for train_step in range(self.params['num_agent_train_steps_per_iter']):
-            obs_batch, act_batch, rew_batch, nobs_batch, term_batch = self.agent.sample(self.params['train_batch_size'])
-            train_log = self.agent.train(obs_batch, act_batch, rew_batch, nobs_batch, term_batch)
+        for train_step in range(self.params["num_agent_train_steps_per_iter"]):
+            obs_batch, act_batch, rew_batch, nobs_batch, term_batch = self.agent.sample(
+                self.params["train_batch_size"]
+            )
+            train_log = self.agent.train(
+                obs_batch, act_batch, rew_batch, nobs_batch, term_batch
+            )
             all_logs.append(train_log)
         return all_logs
 
@@ -130,7 +131,9 @@ class RL_Trainer(object):
         last_log = all_logs[-1]
         # collect eval trajectories, for logging
         print("\nCollecting data for eval...")
-        eval_paths, eval_envsteps_this_batch = sample_trajectories(self.env, eval_policy, self.params['eval_batch_size'], self.params['ep_len'])
+        eval_paths, eval_envsteps_this_batch = sample_trajectories(
+            self.env, eval_policy, self.params["eval_batch_size"], self.params["ep_len"]
+        )
 
         # save eval metrics
         if self.logmetrics:
@@ -166,8 +169,8 @@ class RL_Trainer(object):
 
             # perform the logging
             for key, value in logs.items():
-                print('{} : {}'.format(key, value))
+                print("{} : {}".format(key, value))
                 self.logger.log_scalar(value, key, itr)
-            print('Done logging...\n\n')
+            print("Done logging...\n\n")
 
             self.logger.flush()
