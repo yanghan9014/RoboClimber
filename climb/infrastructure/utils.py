@@ -1,9 +1,7 @@
 import numpy as np
 
 
-def sample_trajectory(
-    env, policy, max_path_length, render=False, render_mode=("rgb_array")
-):
+def sample_trajectory(env, policy, max_path_length, render=False, render_mode=("rgb_array")):
     obs = env.reset()
     obses, acts, rews, nobses, terms, imgs = [], [], [], [], [], []
     steps = 0
@@ -55,18 +53,14 @@ def sample_trajectories(
         paths.append(path)
         timesteps_this_batch += get_pathlength(path)
         print(
-            "sampled {}/{} timesteps".format(
-                timesteps_this_batch, min_timesteps_per_batch
-            ),
+            "sampled {}/{} timesteps".format(timesteps_this_batch, min_timesteps_per_batch),
             end="\r",
         )
 
     return paths, timesteps_this_batch
 
 
-def sample_n_trajectories(
-    env, policy, ntraj, max_path_length, render=False, render_mode=("rgb_array")
-):
+def sample_n_trajectories(env, policy, ntraj, max_path_length, render=False, render_mode=("rgb_array")):
     # TODO: get this from hw1
     paths = []
     for i in range(ntraj):

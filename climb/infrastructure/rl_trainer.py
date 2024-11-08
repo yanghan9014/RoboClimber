@@ -36,11 +36,7 @@ class RL_Trainer(object):
         # Are the observations images?
         img = len(self.env.observation_space.shape) > 2
 
-        ob_dim = (
-            self.env.observation_space.shape
-            if img
-            else self.env.observation_space.shape[0]
-        )
+        ob_dim = self.env.observation_space.shape if img else self.env.observation_space.shape[0]
         ac_dim = self.env.action_space.n if discrete else self.env.action_space.shape[0]
         self.params["agent_params"]["ac_dim"] = ac_dim
         self.params["agent_params"]["ob_dim"] = ob_dim
@@ -76,9 +72,7 @@ class RL_Trainer(object):
             use_batchsize = self.params["batch_size"]
             if itr == 0:
                 use_batchsize = self.params["batch_size_initial"]
-            paths, envsteps_this_batch = self.collect_training_trajectories(
-                itr, collect_policy, use_batchsize
-            )
+            paths, envsteps_this_batch = self.collect_training_trajectories(itr, collect_policy, use_batchsize)
 
             self.total_envsteps += envsteps_this_batch
 
@@ -92,9 +86,7 @@ class RL_Trainer(object):
             if self.logmetrics:
                 self.perform_logging(itr, paths, eval_policy, all_logs)
                 if self.params["save_params"]:
-                    self.agent.save(
-                        "{}/agent_itr_{}.pt".format(self.params["logdir"], itr)
-                    )
+                    self.agent.save("{}/agent_itr_{}.pt".format(self.params["logdir"], itr))
 
     ####################################
     ####################################
@@ -108,20 +100,14 @@ class RL_Trainer(object):
             envsteps_this_batch: the sum over the numbers of environment steps in paths
         """
         # print('Collecting train data...')
-        paths, envsteps_this_batch = sample_trajectories(
-            self.env, collect_policy, batch_size, self.params["ep_len"]
-        )
+        paths, envsteps_this_batch = sample_trajectories(self.env, collect_policy, batch_size, self.params["ep_len"])
         return paths, envsteps_this_batch
 
     def train_agent(self):
         all_logs = []
         for train_step in range(self.params["num_agent_train_steps_per_iter"]):
-            obs_batch, act_batch, rew_batch, nobs_batch, term_batch = self.agent.sample(
-                self.params["train_batch_size"]
-            )
-            train_log = self.agent.train(
-                obs_batch, act_batch, rew_batch, nobs_batch, term_batch
-            )
+            obs_batch, act_batch, rew_batch, nobs_batch, term_batch = self.agent.sample(self.params["train_batch_size"])
+            train_log = self.agent.train(obs_batch, act_batch, rew_batch, nobs_batch, term_batch)
             all_logs.append(train_log)
         return all_logs
 

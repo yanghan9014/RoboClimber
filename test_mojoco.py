@@ -1,9 +1,7 @@
 import gymnasium as gym
 
 # Create a MuJoCo environment
-env = gym.make(
-    "Ant-v4"
-)  # You can choose other environments like 'HalfCheetah-v4' or 'Humanoid-v4'
+env = gym.make("Ant-v4")  # You can choose other environments like 'HalfCheetah-v4' or 'Humanoid-v4'
 
 # Reset the environment
 observation, info = env.reset()
