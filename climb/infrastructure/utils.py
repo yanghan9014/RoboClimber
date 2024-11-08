@@ -1,5 +1,4 @@
 import numpy as np
-import time
 
 from typing import Callable, Union, Tuple, Dict
 from gymnasium import spaces
@@ -125,7 +124,15 @@ def sample_trajectory(env, policy, max_path_length, render=False, render_mode=('
 
     return Path(obses, imgs, acts, rews, nobses, terms)
 
-def sample_trajectories(env, policy, min_timesteps_per_batch, max_path_length, render=False, render_mode=('rgb_array')):
+
+def sample_trajectories(
+    env,
+    policy,
+    min_timesteps_per_batch,
+    max_path_length,
+    render=False,
+    render_mode=("rgb_array"),
+):
     # TODO: get this from hw1
     timesteps_this_batch = 0
     paths = []
@@ -133,32 +140,40 @@ def sample_trajectories(env, policy, min_timesteps_per_batch, max_path_length, r
         path = sample_trajectory(env, policy, max_path_length, render, render_mode)
         paths.append(path)
         timesteps_this_batch += get_pathlength(path)
-        print('sampled {}/{} timesteps'.format(timesteps_this_batch, min_timesteps_per_batch), end='\r')
+        print(
+            "sampled {}/{} timesteps".format(timesteps_this_batch, min_timesteps_per_batch),
+            end="\r",
+        )
 
     return paths, timesteps_this_batch
 
-def sample_n_trajectories(env, policy, ntraj, max_path_length, render=False, render_mode=('rgb_array')):
+
+def sample_n_trajectories(env, policy, ntraj, max_path_length, render=False, render_mode=("rgb_array")):
     # TODO: get this from hw1
     paths = []
     for i in range(ntraj):
         path = sample_trajectory(env, policy, max_path_length, render, render_mode)
         paths.append(path)
-        print('sampled {}/ {} trajs'.format(i, ntraj), end='\r')
+        print("sampled {}/ {} trajs".format(i, ntraj), end="\r")
     return paths
+
 
 def Path(obs, image_obs, acs, rewards, next_obs, terminals):
     """
-        Take info (separate arrays) from a single rollout
-        and return it in a single dictionary
+    Take info (separate arrays) from a single rollout
+    and return it in a single dictionary
     """
     if image_obs != []:
         image_obs = np.stack(image_obs, axis=0)
-    return {"observation" : np.array(obs, dtype=np.float32),
-            "image_obs" : np.array(image_obs, dtype=np.uint8),
-            "reward" : np.array(rewards, dtype=np.float32),
-            "action" : np.array(acs, dtype=np.float32),
-            "next_observation": np.array(next_obs, dtype=np.float32),
-            "terminal": np.array(terminals, dtype=np.float32)}
+    return {
+        "observation": np.array(obs, dtype=np.float32),
+        "image_obs": np.array(image_obs, dtype=np.uint8),
+        "reward": np.array(rewards, dtype=np.float32),
+        "action": np.array(acs, dtype=np.float32),
+        "next_observation": np.array(next_obs, dtype=np.float32),
+        "terminal": np.array(terminals, dtype=np.float32),
+    }
+
 
 def get_pathlength(path):
     return len(path["reward"])

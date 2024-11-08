@@ -6,7 +6,7 @@ def register_custom_envs(env_name):
     if env_name not in registry:
         register(
             id=env_name,
-            entry_point='climb.envs.mujoco.climber:Climber',
+            entry_point="climb.envs.mujoco.climber:Climber",
             max_episode_steps=1000,
             reward_threshold=200,
         )

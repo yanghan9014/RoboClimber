@@ -1,6 +1,7 @@
 # Register the environment if you want to call it by name
 import gymnasium as gym
 from gymnasium.wrappers import RecordVideo
+
 # from climb.envs.mujoco.climber import CustomHumanoidEnv
 
 # env = CustomHumanoidEnv()
