@@ -3,7 +3,7 @@ from gymnasium.wrappers import RecordVideo
 # from stable_baselines3 import PPO
 # from stable_baselines3.common.vec_env import DummyVecEnv
 import time
-from climb.infrastructure.utils import register_custom_envs
+from climb.envs.envs_utils import register_custom_envs
 import os
 import pdb
 
