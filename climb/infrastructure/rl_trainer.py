@@ -5,6 +5,7 @@ import sys
 import time
 
 import gymnasium as gym
+from typing import Union
 from gymnasium import wrappers
 import numpy as np
 import torch
@@ -12,6 +13,8 @@ from climb.infrastructure import pytorch_util as ptu
 from climb.infrastructure.utils import sample_trajectory, sample_trajectories, sample_n_trajectories
 from climb.infrastructure.logger import Logger
 from climb.envs.envs_utils import register_custom_envs
+from climb.agents.ppo import PPOAgent
+from climb.infrastructure.utils import Path
 
 class RL_Trainer(object):
     def __init__(self, params):
@@ -34,6 +37,11 @@ class RL_Trainer(object):
         #############
         register_custom_envs(self.params['env_name'])
         self.env = gym.make(self.params['env_name'])
+        
+        self._last_obs = self.env.reset()[0]
+        self._last_episode_starts = True
+        self.num_timesteps = 0
+
         # Maximum length for episodes
         self.params['ep_len'] = self.params['ep_len'] or self.env.spec.max_episode_steps
         discrete = isinstance(self.env.action_space, gym.spaces.Discrete)
@@ -51,53 +59,98 @@ class RL_Trainer(object):
         ## AGENT
         #############
         agent_class = self.params['agent_class']
-        self.agent = agent_class(self.env, self.params['agent_params'])
+        self.agent: Union[PPOAgent] = agent_class(self.env, self.params['agent_params'], ep_len=self.params['ep_len'])
 
-    def run_training_loop(self, n_iter, collect_policy, eval_policy):
+
+    def run_training_loop(self):
         """
         :param n_iter:  number of iterations
         :param collect_policy:
         :param eval_policy:
         """
-        self.total_envsteps = 0
+        # self.total_envsteps = 0
         self.start_time = time.time()
 
-        print_period = 1000
-        for itr in range(n_iter + 1):
-            if itr % print_period == 0:
-                print("\n\n********** Iteration %i ************"%itr)
+        # print_period = 1000
+        # for itr in range(n_iter + 1):
+        #     if itr % print_period == 0:
+        #         print("\n\n********** Iteration %i ************"%itr)
 
-            # decide if metrics should be logged
+        # decide if metrics should be logged
+
+
+        # use_batchsize = self.params['batch_size']
+        paths = []
+        while self.num_timesteps <= self.params['max_training_timesteps']:
+
             if self.params['scalar_log_freq'] == -1:
                 self.logmetrics = False
-            elif itr % self.params['scalar_log_freq'] == 0:
+            elif self.num_timesteps % self.params['scalar_log_freq'] == 0:
                 self.logmetrics = True
             else:
                 self.logmetrics = False
 
-            use_batchsize = self.params['batch_size']
-            if itr==0:
-                use_batchsize = self.params['batch_size_initial']
-            paths, envsteps_this_batch = (
-                self.collect_training_trajectories(
-                    itr, collect_policy, use_batchsize)
+            path = self.collect_rollouts(self.env, self.agent.rollout_buffer, self.params['ep_len'])
+            paths.append(path)
+
+            self.agent._update_current_progress_remaining(self.num_timesteps, self.params['max_training_timesteps'])
+
+            self.agent.train()
+    
+            if self.logmetrics:
+                self.perform_logging(self.num_timesteps, paths, self.agent.actor, None)
+                if self.params['save_params']:
+                    self.agent.save('{}/agent_itr_{}.pt'.format(self.params['logdir'], self.num_timesteps))
+    
+    ####################################
+    ####################################
+
+    def collect_rollouts(self, env, rollout_buffer, n_rollout_steps):
+
+        self.agent.eval_mode()
+        n_steps = 0
+        rollout_buffer.reset()
+        obs, imgs, acs, rews, next_obs, terminals = [], [], [], [], [], []
+        while n_steps < n_rollout_steps:
+
+            with torch.no_grad():
+                _last_obs = ptu.from_numpy(self._last_obs)
+                actions, log_probs = self.agent.actor.get_action(self._last_obs)
+                values = self.agent.critic(_last_obs)
+
+            clipped_actions = np.clip(actions, self.env.action_space.low, self.env.action_space.high)
+            new_obs, rewards, dones, truncated, infos = env.step(clipped_actions)
+
+            self.num_timesteps += 1
+
+            n_steps += 1
+
+            if self.params['agent_params']['discrete']:
+                actions = actions.reshape(-1, 1)
+
+            rollout_buffer.add(
+                self._last_obs,
+                actions,
+                rewards,
+                self._last_episode_starts,
+                values.cpu(),
+                log_probs.cpu(),
             )
 
-            self.total_envsteps += envsteps_this_batch
+            obs.append(self._last_obs)
+            acs.append(actions)
+            rews.append(rewards)
+            next_obs.append(new_obs)
+            if dones or n_steps > n_rollout_steps:
+                terminals.append(1)
+            else:
+                terminals.append(0)
 
-            # add collected data to replay buffer
-            self.agent.add_to_replay_buffer(paths)
+            self._last_obs = new_obs
+            self._last_episode_starts = dones
 
-            # train agent (using sampled data from replay buffer)
-            if itr % print_period == 0:
-                print("\nTraining agent...")
-            all_logs = self.train_agent() 
-            if self.logmetrics:
-                self.perform_logging(itr, paths, eval_policy, all_logs)
-                if self.params['save_params']:
-                    self.agent.save('{}/agent_itr_{}.pt'.format(self.params['logdir'], itr))
-    ####################################
-    ####################################
+        return Path(obs, imgs, acs, rews, next_obs, terminals)
+
 
     def collect_training_trajectories(self, collect_policy, batch_size):
         """
@@ -127,7 +180,8 @@ class RL_Trainer(object):
     ####################################
     ####################################
     def perform_logging(self, itr, paths, eval_policy, all_logs):
-        last_log = all_logs[-1]
+        self.agent.eval_mode()
+        last_log = None if all_logs is None else all_logs[-1]
         # collect eval trajectories, for logging
         print("\nCollecting data for eval...")
         eval_paths, eval_envsteps_this_batch = sample_trajectories(self.env, eval_policy, self.params['eval_batch_size'], self.params['ep_len'])
@@ -156,13 +210,15 @@ class RL_Trainer(object):
             logs["Train_MinReturn"] = np.min(train_returns)
             logs["Train_AverageEpLen"] = np.mean(train_ep_lens)
 
-            logs["Train_EnvstepsSoFar"] = self.total_envsteps
+            # logs["Train_EnvstepsSoFar"] = self.total_envsteps
             logs["TimeSinceStart"] = time.time() - self.start_time
-            logs.update(last_log)
+
+            if last_log is not None:
+                logs.update(last_log)
 
             if itr == 0:
                 self.initial_return = np.mean(train_returns)
-            logs["Initial_DataCollection_AverageReturn"] = self.initial_return
+            # logs["Initial_DataCollection_AverageReturn"] = self.initial_return
 
             # perform the logging
             for key, value in logs.items():

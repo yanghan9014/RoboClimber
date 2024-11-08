@@ -1,8 +1,97 @@
 import numpy as np
 import time
 
+from typing import Callable, Union, Tuple, Dict
+from gymnasium import spaces
+
+Schedule = Callable[[float], float]
+def constant_fn(val: float) -> Schedule:
+    """
+    Create a function that returns a constant
+    It is useful for learning rate schedule (to avoid code duplication)
+
+    :param val: constant value
+    :return: Constant schedule function.
+    """
+
+    def func(_):
+        return val
+
+    return func
+
+def get_schedule_fn(value_schedule: Union[Schedule, float]) -> Schedule:
+    """
+    Transform (if needed) learning rate and clip range (for PPO)
+    to callable.
+
+    :param value_schedule: Constant value of schedule function
+    :return: Schedule function (can return constant value)
+    """
+    # If the passed schedule is a float
+    # create a constant function
+    if isinstance(value_schedule, (float, int)):
+        # Cast to float to avoid errors
+        value_schedule = constant_fn(float(value_schedule))
+    else:
+        assert callable(value_schedule)
+    # Cast to float to avoid unpickling errors to enable weights_only=True, see GH#1900
+    # Some types are have odd behaviors when part of a Schedule, like numpy floats
+    return lambda progress_remaining: float(value_schedule(progress_remaining))
+
+def get_obs_shape(
+    observation_space: spaces.Space,
+) -> Union[Tuple[int, ...], Dict[str, Tuple[int, ...]]]:
+    """
+    Get the shape of the observation (useful for the buffers).
+
+    :param observation_space:
+    :return:
+    """
+    if isinstance(observation_space, spaces.Box):
+        return observation_space.shape
+    elif isinstance(observation_space, spaces.Discrete):
+        # Observation is an int
+        return (1,)
+    elif isinstance(observation_space, spaces.MultiDiscrete):
+        # Number of discrete features
+        return (int(len(observation_space.nvec)),)
+    elif isinstance(observation_space, spaces.MultiBinary):
+        # Number of binary features
+        return observation_space.shape
+    elif isinstance(observation_space, spaces.Dict):
+        return {key: get_obs_shape(subspace) for (key, subspace) in observation_space.spaces.items()}  # type: ignore[misc]
+
+    else:
+        raise NotImplementedError(f"{observation_space} observation space is not supported")
+
+def get_action_dim(action_space: spaces.Space) -> int:
+    """
+    Get the dimension of the action space.
+
+    :param action_space:
+    :return:
+    """
+    if isinstance(action_space, spaces.Box):
+        return int(np.prod(action_space.shape))
+    elif isinstance(action_space, spaces.Discrete):
+        # Action is an int
+        return 1
+    elif isinstance(action_space, spaces.MultiDiscrete):
+        # Number of discrete actions
+        return int(len(action_space.nvec))
+    elif isinstance(action_space, spaces.MultiBinary):
+        # Number of binary actions
+        assert isinstance(
+            action_space.n, int
+        ), f"Multi-dimensional MultiBinary({action_space.n}) action space is not supported. You can flatten it instead."
+        return int(action_space.n)
+    else:
+        raise NotImplementedError(f"{action_space} action space is not supported")
+
 def sample_trajectory(env, policy, max_path_length, render=False, render_mode=('rgb_array')):
     obs = env.reset()
+    if isinstance(obs, tuple):
+        obs = obs[0]
     obses, acts, rews, nobses, terms, imgs = [], [], [], [], [], []
     steps = 0
     while True:
@@ -22,7 +111,7 @@ def sample_trajectory(env, policy, max_path_length, render=False, render_mode=('
         act = policy.get_action(obs)
         act = act[0]
         acts.append(act)
-        nobs, rew, done, _ = env.step(act)
+        nobs, rew, done, _, _ = env.step(act)
         nobses.append(nobs)
         rews.append(rew)
         obs = nobs.copy()
