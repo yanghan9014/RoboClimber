@@ -1,5 +1,6 @@
+import numpy as np
+import gymnasium as gym
 from gymnasium.envs.mujoco.humanoid_v5 import HumanoidEnv
-
 
 def mass_center(model, data):
     mass = np.expand_dims(model.body_mass, axis=1)
@@ -8,7 +9,7 @@ def mass_center(model, data):
 
 class Climber(HumanoidEnv):
     def __init__(self, xml_file=None, **kwargs):
-        render_mode = kwargs.get("render_mode", "rgb_array")
+        render_mode = kwargs.get('render_mode', 'rgb_array')
         if xml_file is not None:
             super().__init__(xml_file=xml_file, render_mode=render_mode)
         else:
