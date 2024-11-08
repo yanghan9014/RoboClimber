@@ -28,3 +28,40 @@ That should a video locates at `./videos/` folder.
 - [ ] Implement PPO
 - [ ] Test PPO on `humanoid-v5`, training it to walk forward
 - [ ] Generate climbing wall .xml file
+
+## How to Use Pre-commit Hooks: A Step-by-Step Guide (TQ ChatGPT)
+### 1. Ensure You Have Pre-commit Installed
+First, ensure that `pre-commit` is installed. You can check if it's already installed by running:
+
+```bash
+pre-commit --version
+```
+
+If it’s not installed, you can install it using pip:
+```bash
+pip install pre-commit
+```
+
+### 2. How to Run Pre-commit Hooks
+To run the pre-commit hooks manually on all files in the repository, you can use:
+```bash
+pre-commit run --all-files
+```
+This command will execute all the hooks configured in `.pre-commit-config.yaml` on all the files in the repository.
+
+### 3. Handling Failed Checks
+
+If any pre-commit hook fails, here’s what you should do:
+- Fix the Issues: The pre-commit hooks will provide feedback on what needs to be fixed (e.g., formatting issues, linting errors, etc.). Follow the feedback to fix your code.
+- Auto-formatting (if applicable): If a formatter (like `black`) reports an issue, it will automatically format the code for you. 
+
+### 3. TL;DR
+#### Run pre-commit hooks on all files:
+```bash
+pre-commit run --all-files
+```
+#### Commit changes (with pre-commit hooks):
+```bash
+git add "Some files"
+git commit -m "Your commit message"
+```
