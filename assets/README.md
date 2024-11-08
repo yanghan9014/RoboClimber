@@ -27,10 +27,10 @@ The action space is a `Box(-0.4, 0.4, (17,), float32)`. An action represents the
 | 14  | Torque applied on the rotor between the torso and left upper arm (coordinate -1)   | -0.4        | 0.4         | left_shoulder1                   | hinge | torque (N m) |
 | 15  | Torque applied on the rotor between the torso and left upper arm (coordinate -2)   | -0.4        | 0.4         | left_shoulder2                   | hinge | torque (N m) |
 | 16  | Torque applied on the rotor between the left upper arm and left lower arm          | -0.4        | 0.4         | left_elbow                       | hinge | torque (N m) |
-| 17*  | Torque applied on the rotor between the left shin and left foot          | TBD        | TBD         | left_ankle                       | hinge | torque (N m) |
-| 18*  | Torque applied on the rotor between the right shin and right foot          | TBD        | TBD         | right_ankle                       | hinge | torque (N m) |
-
-*not implemented yet
+| 17  | Torque applied on the rotor between the left shin and left foot          | TBD        | TBD         | left_ankle                       | hinge | torque (N m) |
+| 18  | Torque applied on the rotor between the right shin and right foot          | TBD        | TBD         | right_ankle                       | hinge | torque (N m) |
+| 19-21  | Right fingers         | -1        | 1         | finger_r*                       | tendon | (?) |
+| 22-24  | Left fingers         | -1        | 1         | finger_l*                       | tendon | (?) |
 
 ## Observation Space
 The observation space consists of the following parts (in order)
@@ -128,7 +128,7 @@ By default, however, the observation space is a `Box(-Inf, Inf, (348,), float64)
 
 
 ## Joints
-| joint           | id (for `v2`, `v3`, `v4)` | id (for `v5`) |
+| joint           | id (for `v2`, `v3`, `v4`) | id (for `v5`) |
 |  -------------  |  ---   |  ---  |
 | root (note: all values are constant 0) | 0  |excluded|
 | root (note: all values are constant 0) | 1  |excluded|
@@ -152,7 +152,7 @@ By default, however, the observation space is a `Box(-Inf, Inf, (348,), float64)
 | right_elbow     | 19 | 13     |
 | left_shoulder1  | 20 | 14     |
 | left_shoulder2  | 21 | 15     |
-| left_elfbow     | 22 | 16     |
+| left_elbow      | 22 | 16     |
 
 The (x,y,z) coordinates are translational DOFs, while the orientations are rotational DOFs expressed as quaternions.
 One can read more about free joints in the [MuJoCo documentation](https://mujoco.readthedocs.io/en/latest/XMLreference.html).
