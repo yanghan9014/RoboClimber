@@ -6,6 +6,7 @@ import pdb
 class Climber(HumanoidEnv):
     def __init__(self, xml_file=None, **kwargs):
         render_mode = kwargs.get('render_mode', 'rgb_array')
+        self.pre_z = 0
         if xml_file is not None:
             super().__init__(xml_file=xml_file, render_mode=render_mode)
         else:
@@ -28,6 +29,16 @@ class Climber(HumanoidEnv):
     #     obs = super().reset()
     #     return obs
 
+    def step(self, action):
+        # print(action)
+        observation, reward, done, truncated, info = super(Climber, self).step(action)
+        # reward: delta z + vertical speed
+        z = observation[2] # height of the humanoid
+        reward = z - self.pre_z
+        # print(reward)
+        self.pre_z = z
+        return observation, reward, done, truncated, info
+    
     def render(self):
         return super().render()
 
