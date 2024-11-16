@@ -23,6 +23,7 @@ class Climber(HumanoidEnv):
         return is_healthy
 
     def step(self, action):
+        print(self.data.sensordata)
         xyz_position_before = mass_center(self.model, self.data)
         self.do_simulation(action, self.frame_skip)
         xyz_position_after = mass_center(self.model, self.data)
@@ -42,6 +43,7 @@ class Climber(HumanoidEnv):
             "x_velocity": x_velocity,
             "y_velocity": y_velocity,
             "z_velocity": z_velocity,
+            "sensor_data": self.data.sensordata.copy(), # r1, r2, r3, l1, l2, l3
             **reward_info,
         }
 

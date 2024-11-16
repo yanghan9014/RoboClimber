@@ -288,4 +288,12 @@
         <motor tendon="finger_tendon_l2" ctrlrange="-1 1" gear="1000" name="finger_l2"/>
         <motor tendon="finger_tendon_l3" ctrlrange="-1 1" gear="1000" name="finger_l3"/>
     </actuator>
+    <sensor>
+        <touch name="finger_touch_r1" site="top_site_r1"/>
+        <touch name="finger_touch_r2" site="top_site_r2"/>
+        <touch name="finger_touch_r3" site="top_site_r3"/>
+        <touch name="finger_touch_l1" site="top_site_l1"/>
+        <touch name="finger_touch_l2" site="top_site_l2"/>
+        <touch name="finger_touch_l3" site="top_site_l3"/>
+    </sensor>
 </mujoco>
