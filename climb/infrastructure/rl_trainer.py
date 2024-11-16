@@ -7,14 +7,17 @@ import time
 import gymnasium as gym
 from typing import Union
 from gymnasium import wrappers
+from gymnasium.wrappers import RecordVideo
 import numpy as np
 import torch
+import torch.nn as nn
 from climb.infrastructure import pytorch_util as ptu
 from climb.infrastructure.utils import sample_trajectory, sample_trajectories, sample_n_trajectories
 from climb.infrastructure.logger import Logger
 from climb.envs.envs_utils import register_custom_envs
 from climb.agents.ppo import PPOAgent
-from climb.infrastructure.utils import Path
+from climb.infrastructure.utils import Path, Path_height
+import pdb
 
 class RL_Trainer(object):
     def __init__(self, params):
@@ -24,9 +27,6 @@ class RL_Trainer(object):
         self.params = params
         self.logger = Logger(self.params['logdir'])
 
-        seed = self.params['seed']
-        np.random.seed(seed)
-        torch.manual_seed(seed)
         ptu.init_gpu(
             use_gpu=not self.params['no_gpu'],
             gpu_id=self.params['which_gpu']
@@ -36,9 +36,16 @@ class RL_Trainer(object):
         ## ENV
         #############
         register_custom_envs(self.params['env_name'])
-        self.env = gym.make(self.params['env_name'])
+
+        if self.params['xml_file'] is not None:
+            xml_file = os.path.abspath(self.params['xml_file'])
+            self.env = gym.make(self.params['env_name'], xml_file=xml_file, render_mode="rgb_array")
+        else:
+            self.env = gym.make(self.params['env_name'], render_mode="rgb_array")
+        self.env = RecordVideo(self.env, "videos/", episode_trigger=lambda episode_id: episode_id % 1000 == 1, name_prefix=self.params['env_name'])
+
         
-        self._last_obs = self.env.reset()[0]
+        self._last_obs = self.env.reset(seed=self.params['seed'])[0]
         self._last_episode_starts = True
         self.num_timesteps = 0
 
@@ -61,6 +68,13 @@ class RL_Trainer(object):
         agent_class = self.params['agent_class']
         self.agent: Union[PPOAgent] = agent_class(self.env, self.params['agent_params'], ep_len=self.params['ep_len'])
 
+        if self.params['load_params'] is not None:
+            checkpoint = torch.load(self.params['load_params'])
+            mean_net_state_dict = {k.replace('mean_net.', ''): v for k, v in checkpoint['actor'].items() if k.startswith('mean_net')}
+            self.agent.actor.mean_net.load_state_dict(mean_net_state_dict)
+            self.agent.actor.std = nn.Parameter(checkpoint['actor']['std'])
+            self.agent.critic.load_state_dict(checkpoint['critic'])
+
 
     def run_training_loop(self):
         """
@@ -82,7 +96,6 @@ class RL_Trainer(object):
         # use_batchsize = self.params['batch_size']
         paths = []
         while self.num_timesteps <= self.params['max_training_timesteps']:
-
             if self.params['scalar_log_freq'] == -1:
                 self.logmetrics = False
             elif self.num_timesteps % self.params['scalar_log_freq'] == 0:
@@ -91,16 +104,18 @@ class RL_Trainer(object):
                 self.logmetrics = False
 
             path = self.collect_rollouts(self.env, self.agent.rollout_buffer, self.params['ep_len'])
-            paths.append(path)
+            paths.extend(path)
 
             self.agent._update_current_progress_remaining(self.num_timesteps, self.params['max_training_timesteps'])
 
             self.agent.train()
     
             if self.logmetrics:
+                print(f"============= num_timesteps: {self.num_timesteps} =============")
                 self.perform_logging(self.num_timesteps, paths, self.agent.actor, None)
                 if self.params['save_params']:
                     self.agent.save('{}/agent_itr_{}.pt'.format(self.params['logdir'], self.num_timesteps))
+                paths = []
     
     ####################################
     ####################################
@@ -110,7 +125,11 @@ class RL_Trainer(object):
         self.agent.eval_mode()
         n_steps = 0
         rollout_buffer.reset()
-        obs, imgs, acs, rews, next_obs, terminals = [], [], [], [], [], []
+        obs, acs, rews, next_obs, terminals = [], [], [], [], []
+        # obs, height, acs, rews, next_obs, terminals = [], [], [], [], [], []
+        self.env.reset(seed=self.params['seed'])
+        self.params['seed'] += 1
+        paths = []
         while n_steps < n_rollout_steps:
 
             with torch.no_grad():
@@ -120,6 +139,7 @@ class RL_Trainer(object):
 
             clipped_actions = np.clip(actions, self.env.action_space.low, self.env.action_space.high)
             new_obs, rewards, dones, truncated, infos = env.step(clipped_actions)
+            # z_pos = infos['z_position']
 
             self.num_timesteps += 1
 
@@ -127,6 +147,15 @@ class RL_Trainer(object):
 
             if self.params['agent_params']['discrete']:
                 actions = actions.reshape(-1, 1)
+            if (
+                dones
+                and infos.get("terminal_observation") is not None
+                and infos.get("TimeLimit.truncated", False)
+            ):
+                terminal_obs = torch.tensor(infos["terminal_observation"])[0]
+                with torch.no_grad():
+                    terminal_value = self.agent.critic(terminal_obs)[0]
+                rewards += self.gamma * terminal_value
 
             rollout_buffer.add(
                 self._last_obs,
@@ -139,17 +168,27 @@ class RL_Trainer(object):
 
             obs.append(self._last_obs)
             acs.append(actions)
+            # height.append(z_pos)
             rews.append(rewards)
             next_obs.append(new_obs)
-            if dones or n_steps > n_rollout_steps:
+            if dones or n_steps >= n_rollout_steps:
                 terminals.append(1)
+                # paths.append(Path_height(obs, height, acs, rews, next_obs, terminals))
+                paths.append(Path(obs, acs, rews, next_obs, terminals))
+                obs, acs, rews, next_obs, terminals = [], [], [], [], []
+                # obs, height, acs, rews, next_obs, terminals = [], [], [], [], [], []
+                self.env.reset(seed=self.params['seed'])
+                self.params['seed'] += 1
             else:
                 terminals.append(0)
 
             self._last_obs = new_obs
             self._last_episode_starts = dones
 
-        return Path(obs, imgs, acs, rews, next_obs, terminals)
+            with torch.no_grad():
+                values = self.agent.critic(ptu.from_numpy(new_obs))
+        rollout_buffer.compute_returns_and_advantage(last_values=values, dones=dones)
+        return paths
 
 
     def collect_training_trajectories(self, collect_policy, batch_size):
@@ -185,12 +224,16 @@ class RL_Trainer(object):
         # collect eval trajectories, for logging
         print("\nCollecting data for eval...")
         eval_paths, eval_envsteps_this_batch = sample_trajectories(self.env, eval_policy, self.params['eval_batch_size'], self.params['ep_len'])
+        # eval_paths = sample_n_trajectories(self.env, eval_policy, self.params['eval_traj_n'], self.params['ep_len'])
 
         # save eval metrics
         if self.logmetrics:
             # returns, for logging
             train_returns = [path["reward"].sum() for path in paths]
             eval_returns = [eval_path["reward"].sum() for eval_path in eval_paths]
+
+            # train_max_height = [path["height"].max() for path in paths]
+            # eval_max_height = [eval_path["height"].max() for eval_path in eval_paths]
 
             # episode lengths, for logging
             train_ep_lens = [len(path["reward"]) for path in paths]
@@ -203,12 +246,14 @@ class RL_Trainer(object):
             logs["Eval_MaxReturn"] = np.max(eval_returns)
             logs["Eval_MinReturn"] = np.min(eval_returns)
             logs["Eval_AverageEpLen"] = np.mean(eval_ep_lens)
+            # logs["Eval_AverageMaxHeight"] = np.mean(eval_max_height)
 
             logs["Train_AverageReturn"] = np.mean(train_returns)
             logs["Train_StdReturn"] = np.std(train_returns)
             logs["Train_MaxReturn"] = np.max(train_returns)
             logs["Train_MinReturn"] = np.min(train_returns)
             logs["Train_AverageEpLen"] = np.mean(train_ep_lens)
+            # logs["Train_AverageMaxHeight"] = np.mean(train_max_height)
 
             # logs["Train_EnvstepsSoFar"] = self.total_envsteps
             logs["TimeSinceStart"] = time.time() - self.start_time

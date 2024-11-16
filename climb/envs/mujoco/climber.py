@@ -14,7 +14,8 @@ class Climber(HumanoidEnv):
             super().__init__(xml_file=xml_file, render_mode=render_mode)
         else:
             super().__init__(render_mode=render_mode)
-        self._upward_reward_weight = self._forward_reward_weight
+        # self._upward_reward_weight = self._forward_reward_weight
+        self._upward_reward_weight = 10.0
     
     @property
     def is_healthy(self):
@@ -31,11 +32,12 @@ class Climber(HumanoidEnv):
         x_velocity, y_velocity, z_velocity = xyz_velocity
 
         observation = self._get_obs()
-        reward, reward_info = self._get_rew(x_velocity, action)
+        reward, reward_info = self._get_rew(z_velocity, action)
         terminated = (not self.is_healthy) and self._terminate_when_unhealthy
         info = {
             "x_position": self.data.qpos[0],
             "y_position": self.data.qpos[1],
+            "z_position": self.data.qpos[2],
             "tendon_length": self.data.ten_length,
             "tendon_velocity": self.data.ten_velocity,
             "distance_from_origin": np.linalg.norm(self.data.qpos[0:2], ord=2),

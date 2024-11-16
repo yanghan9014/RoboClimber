@@ -91,7 +91,8 @@ def sample_trajectory(env, policy, max_path_length, render=False, render_mode=('
     obs = env.reset()
     if isinstance(obs, tuple):
         obs = obs[0]
-    obses, acts, rews, nobses, terms, imgs = [], [], [], [], [], []
+    obses, acts, rews, nobses, terms = [], [], [], [], []
+    # obses, acts, rews, nobses, terms, heights = [], [], [], [], [], []
     steps = 0
     while True:
         # if render:
@@ -110,7 +111,8 @@ def sample_trajectory(env, policy, max_path_length, render=False, render_mode=('
         act = policy.get_action(obs)
         act = act[0]
         acts.append(act)
-        nobs, rew, done, _, _ = env.step(act)
+        nobs, rew, done, _, info = env.step(act)
+        # heights.append(info['z_position'])
         nobses.append(nobs)
         rews.append(rew)
         obs = nobs.copy()
@@ -122,7 +124,8 @@ def sample_trajectory(env, policy, max_path_length, render=False, render_mode=('
         else:
             terms.append(0)
 
-    return Path(obses, imgs, acts, rews, nobses, terms)
+    return Path(obses, acts, rews, nobses, terms)
+    # return Path_height(obses, heights, acts, rews, nobses, terms)
 
 
 def sample_trajectories(
@@ -158,17 +161,28 @@ def sample_n_trajectories(env, policy, ntraj, max_path_length, render=False, ren
     return paths
 
 
-def Path(obs, image_obs, acs, rewards, next_obs, terminals):
+def Path(obs, acs, rewards, next_obs, terminals):
     """
     Take info (separate arrays) from a single rollout
     and return it in a single dictionary
     """
-    if image_obs != []:
-        image_obs = np.stack(image_obs, axis=0)
     return {
         "observation": np.array(obs, dtype=np.float32),
-        "image_obs": np.array(image_obs, dtype=np.uint8),
         "reward": np.array(rewards, dtype=np.float32),
+        "action": np.array(acs, dtype=np.float32),
+        "next_observation": np.array(next_obs, dtype=np.float32),
+        "terminal": np.array(terminals, dtype=np.float32),
+    }
+
+def Path_height(obs, height, acs, rewards, next_obs, terminals):
+    """
+    Take info (separate arrays) from a single rollout
+    and return it in a single dictionary
+    """
+    return {
+        "observation": np.array(obs, dtype=np.float32),
+        "reward": np.array(rewards, dtype=np.float32),
+        "height": np.array(height, dtype=np.float32),
         "action": np.array(acs, dtype=np.float32),
         "next_observation": np.array(next_obs, dtype=np.float32),
         "terminal": np.array(terminals, dtype=np.float32),

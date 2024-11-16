@@ -2,7 +2,7 @@ from gymnasium.envs.registration import register, registry
 
 
 def register_custom_envs(env_name):
-    assert env_name in ['Climber-v0','Humanoid-v5']
+    assert env_name in ['Climber-v0','Humanoid-v5', 'HalfCheetah-v5']
     if env_name not in registry:
         register(
             id=env_name,

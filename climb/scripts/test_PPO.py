@@ -1,22 +1,20 @@
 import gymnasium as gym
 import os
 import time
+import numpy as np
+import torch
 
 from gymnasium.wrappers import RecordVideo
 from climb.agents.ppo import PPOAgent
 from climb.infrastructure.rl_trainer import RL_Trainer
 
-
-env = gym.make("Humanoid-v5", render_mode="rgb_array")
-env = RecordVideo(env, "videos/", episode_trigger=lambda x: True)  # Save every episode
-
-obs = env.reset()
-
-
-
 class PPO_Trainer(object):
 
     def __init__(self, params):
+
+        seed = params['seed']
+        np.random.seed(seed)
+        torch.manual_seed(seed)
 
         #####################
         ## SET AGENT PARAMS
@@ -35,12 +33,12 @@ class PPO_Trainer(object):
 
         train_args = {
             'batch_size': params['batch_size'],
-            'init_act_std': params['init_act_std'],
             'max_grad_norm': params['max_grad_norm'],
-            'epoch': params['epoch'],
+            'policy_updates_per_rollout': params['policy_updates_per_rollout'],
             'ent_coef': params['ent_coef'],
             'vf_coef': params['vf_coef'],
-            'clip_range': params['clip_range']
+            'clip_range': params['clip_range'],
+            'clip_range_vf': params['clip_range_vf'],
         }
 
         agent_params = {**computation_graph_args, **estimate_advantage_args, **train_args}
@@ -65,20 +63,22 @@ def main():
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument('--env_name', type=str, default='Humanoid-v5')
-    parser.add_argument('--ep_len', type=int, default=200)
+    parser.add_argument('--xml_file', type=str, default=None)
+    parser.add_argument('--ep_len', type=int, default=1000)
     parser.add_argument('--max_training_timesteps', type=int, default=1000)
     parser.add_argument('--exp_name', type=str, default='todo')
-    parser.add_argument('--epoch', type=int, default=100)
-
+    parser.add_argument('--policy_updates_per_rollout', type=int, default=5)
 
     parser.add_argument('--eval_batch_size', '-b', type=int, default=1000) 
+    parser.add_argument('--eval_traj_n', type=int, default=10) 
     parser.add_argument('--batch_size', type=int, default=1000) 
 
     parser.add_argument('--vf_coef', type=float, default=0.5)
     parser.add_argument('--ent_coef', type=float, default=0.0)
-    parser.add_argument('--max_grad_norm', type=float, default=5.0)
-    parser.add_argument('--init_act_std', type=float, default=0.6)
+    parser.add_argument('--max_grad_norm', type=float, default=0.5)
     parser.add_argument('--clip_range', type=float, default=0.2)
+    parser.add_argument('--clip_range_vf', type=float, default=None)
+
     parser.add_argument('--learning_rate', '-lr', type=float, default=5e-3)
     parser.add_argument('--gae_lambda', type=float, default=1)
     parser.add_argument('--gamma', type=float, default=0.99)
@@ -90,9 +90,10 @@ def main():
     parser.add_argument('--no_gpu', '-ngpu', action='store_true')
     parser.add_argument('--which_gpu', '-gpu_id', default=0)
     parser.add_argument('--video_log_freq', type=int, default=-1)
-    parser.add_argument('--scalar_log_freq', type=int, default=1)
+    parser.add_argument('--scalar_log_freq', type=int, default=10000)
 
     parser.add_argument('--save_params', action='store_true')
+    parser.add_argument('--load_params', type=str, default=None)
 
     args = parser.parse_args()
 

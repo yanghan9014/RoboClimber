@@ -7,7 +7,9 @@ import torch.optim as optim
 
 from climb.policies.base_policy import BasePolicy
 from climb.infrastructure import pytorch_util as ptu
-from torch import distributions    
+from torch import distributions
+from torch.distributions.transforms import TanhTransform
+import pdb
 
 device = ptu.device
 
@@ -17,11 +19,11 @@ class PPOMLPPolicy(BasePolicy, nn.Module, metaclass=abc.ABCMeta):
                  ob_dim,
                  n_layers,
                  size,
+                 action_space_bound=1.0,
                  discrete=False,
                  learning_rate=1e-4,
                  training=True,
                  nn_baseline=False,
-                 act_std=0.6,
                  **kwargs
         ):
 
@@ -35,6 +37,7 @@ class PPOMLPPolicy(BasePolicy, nn.Module, metaclass=abc.ABCMeta):
         self.learning_rate = learning_rate
         self.training = training
         self.nn_baseline = nn_baseline
+        self.action_space_bound = action_space_bound
 
         if self.discrete:
             self.logits_na = ptu.build_mlp(input_size=self.ob_dim,
@@ -43,7 +46,6 @@ class PPOMLPPolicy(BasePolicy, nn.Module, metaclass=abc.ABCMeta):
                                            size=self.size)
             self.logits_na.to(ptu.device)
             self.mean_net = None
-            self.std = None
             self.optimizer = optim.Adam(self.logits_na.parameters(),
                                         self.learning_rate)
         else:
@@ -51,10 +53,13 @@ class PPOMLPPolicy(BasePolicy, nn.Module, metaclass=abc.ABCMeta):
             self.mean_net = ptu.build_mlp(input_size=self.ob_dim,
                                       output_size=self.ac_dim,
                                       n_layers=self.n_layers, size=self.size)
-            self.std = torch.tensor([act_std]*self.ac_dim).to(ptu.device)
+            self.std = nn.Parameter(
+                torch.ones(self.ac_dim, dtype=torch.float32, device=ptu.device)
+            )
             self.mean_net.to(ptu.device)
+            self.std.to(ptu.device)
             self.optimizer = optim.Adam(
-                self.mean_net.parameters(),
+                itertools.chain([self.std], self.mean_net.parameters()),
                 self.learning_rate
             )
 
@@ -69,7 +74,7 @@ class PPOMLPPolicy(BasePolicy, nn.Module, metaclass=abc.ABCMeta):
             observation = obs[None]
 
         observation = ptu.from_numpy(observation)
-        action_distribution = self.forward(observation)
+        action_distribution, _ = self.forward(observation)
         action = action_distribution.sample()
         return ptu.to_numpy(action.squeeze()), action_distribution.log_prob(action)
 
@@ -84,11 +89,23 @@ class PPOMLPPolicy(BasePolicy, nn.Module, metaclass=abc.ABCMeta):
             scale_tril = torch.diag(self.std)
             batch_dim = batch_mean.shape[0]
             batch_scale_tril = scale_tril.repeat(batch_dim, 1, 1)
-            action_distribution = distributions.MultivariateNormal(
+            if torch.isnan(batch_mean).any() or torch.isnan(self.std).any():
+                # Sometimes the parameters randomly become nan. Still figuring out why
+                pdb.set_trace()
+            base_distribution = distributions.MultivariateNormal(
                 batch_mean,
                 scale_tril=batch_scale_tril,
             )
-            return action_distribution
+            entropy = base_distribution.entropy()
+
+            # Apply tanh transformation to enforce [-1, 1] range
+            tanh_transform = TanhTransform()
+            transformed_distribution = distributions.TransformedDistribution(base_distribution, [tanh_transform])
+            scale = torch.tensor(self.action_space_bound)
+            action_distribution = distributions.TransformedDistribution(transformed_distribution, [
+                torch.distributions.transforms.AffineTransform(loc=0.0, scale=scale)
+            ])
+            return action_distribution, entropy
     
     def update(self):
 

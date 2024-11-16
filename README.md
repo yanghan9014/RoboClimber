@@ -9,12 +9,24 @@ pip install -r requirements.txt
 pip install -e .
 ```
 
-Then you can run the following command to test training the model:
+You can test the custom environment by running
 ```
 python climb/scripts/test_train.py
 ```
+Which should generate a video in the `videos/` directory
 
-That should a video locates at `./videos/` folder.
+Run a `humanoid-v5` environment with 
+```
+python3 climb/scripts/test_PPO.py --max_training_timesteps 1000000 --exp_name ep_len1000_lr3e-4_layer8_s64 -lr 3e-4 -l 8 -s 64 --ep_len 1000
+```
+(`HalfCheetah-v5` works quite well with the current implementation)
+
+Run the custom `climber-v0` environment with 
+```
+python3 climb/scripts/test_PPO.py --max_training_timesteps 3000000 --exp_name ep_len1000_lr5e-4_layer8_s64 -lr 5e-4 -l 8 -s 64 --ep_len 1000 --save_params --env_name Climber-v0 --xml_file 'assets/climber_v0.xml'
+```
+You might need to tune the hyperparameters, and the loss computation for critic (`value_loss`) is dubious at the moment
+
 
 ## Problems
 - `mujoco-py` is deprecated and isn't supported on M1 mac; `stable-baselines3` requires `gymnasium`<0.30 or >=0.28.1, but `gymnasium` still requires `mujoco-py` until the latest `v1.0.0`, so its the only option for me now (Daniel)

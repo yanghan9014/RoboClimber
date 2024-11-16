@@ -11,6 +11,7 @@ from climb.critics.ppo_critic import PPOCritic
 from climb.infrastructure import pytorch_util as ptu
 from climb.infrastructure import buffers
 from climb.infrastructure.utils import get_schedule_fn
+import pdb
 
 device = ptu.device
 class PPOAgent(BaseAgent):
@@ -20,13 +21,15 @@ class PPOAgent(BaseAgent):
 
 
         self.agent_params = agent_params
-        self.epoch = self.agent_params['epoch']
+        self.action_space_bound = env.action_space.high
+        self.policy_updates_per_rollout = self.agent_params['policy_updates_per_rollout']
         self.batch_size = self.agent_params['batch_size']
         self.max_grad_norm = self.agent_params['max_grad_norm']
         self.ent_coef = self.agent_params['ent_coef']
         self.vf_coef = self.agent_params['vf_coef']
         self.clip_range = self.agent_params['clip_range']
         self.clip_range = get_schedule_fn(self.clip_range)
+        self.clip_range_vf = self.agent_params['clip_range_vf']
         self._current_progress_remaining = 1.0
         self.MseLoss = nn.MSELoss()
 
@@ -36,14 +39,20 @@ class PPOAgent(BaseAgent):
         self.gamma = self.agent_params['gamma']
         self.standardize_advantages = self.agent_params['standardize_advantages']
 
+        if self.clip_range_vf is not None:
+            if isinstance(self.clip_range_vf, (float, int)):
+                assert self.clip_range_vf > 0, "`clip_range_vf` must be positive, " "pass `None` to deactivate vf clipping"
+
+            self.clip_range_vf = get_schedule_fn(self.clip_range_vf)
+
         self.actor = PPOMLPPolicy(
             self.agent_params['ac_dim'],
             self.agent_params['ob_dim'],
             self.agent_params['n_layers'],
             self.agent_params['size'],
-            self.agent_params['discrete'],
-            self.agent_params['learning_rate'],
-            act_std=self.agent_params['init_act_std']
+            action_space_bound=self.action_space_bound,
+            discrete=self.agent_params['discrete'],
+            learning_rate=self.agent_params['learning_rate'],
         )
         self.critic = PPOCritic(
             self.agent_params['ob_dim'],
@@ -58,20 +67,20 @@ class PPOAgent(BaseAgent):
         
         self.train_mode()
         clip_range = self.clip_range(self._current_progress_remaining)
+        if self.clip_range_vf is not None:
+            clip_range_vf = self.clip_range_vf(self._current_progress_remaining) 
         
-        for _ in range(self.epoch):
-
+        for _ in range(self.policy_updates_per_rollout):
             for rollout_data in self.rollout_buffer.get(self.batch_size):
-
                 actions = rollout_data.actions
                 observations = rollout_data.observations
                 if self.actor.discrete:
                     actions = rollout_data.actions.long().flatten()
                 
-                distribution = self.actor(observations)
-                values = self.critic(observations)
+                distribution, entropy = self.actor(observations)
+                values = self.critic(observations).squeeze(1)
                 log_prob = distribution.log_prob(actions)
-                entropy =  distribution.entropy()
+                # entropy = distribution.entropy()
 
                 advantages = rollout_data.advantages
                 if self.standardize_advantages:
@@ -82,9 +91,26 @@ class PPOAgent(BaseAgent):
                 policy_loss_1 = advantages * ratio
                 policy_loss_2 = advantages * torch.clamp(ratio, 1 - clip_range, 1 + clip_range)
                 policy_loss = -torch.min(policy_loss_1, policy_loss_2).mean()
+                # print("============================================")
+                # print(f"ratio: {ratio}")
+                # print(f"policy_loss_1: {policy_loss_1.mean():2f}, {policy_loss_2.mean():2f}")
+                # pdb.set_trace()
 
                 # some ppl do value clipping 
-                value_loss = self.MseLoss(rollout_data.returns, values.squeeze())
+                if self.clip_range_vf is None:
+                    # No clipping
+                    values_pred = values
+                else:
+                    # Clip the difference between old and new value
+                    # NOTE: this depends on the reward scaling
+                    values_pred = rollout_data.old_values + torch.clamp(
+                        values - rollout_data.old_values, -clip_range_vf, clip_range_vf
+                    )
+
+                value_loss = self.MseLoss(rollout_data.returns, values_pred.squeeze())
+                # print(rollout_data.returns)
+                # print(values_pred.squeeze())
+                # pdb.set_trace()
 
                 if entropy is None:
                     # Approximate entropy when no analytical form
@@ -93,11 +119,14 @@ class PPOAgent(BaseAgent):
                     entropy_loss = -torch.mean(entropy)
                 
                 loss = policy_loss + self.ent_coef * entropy_loss + self.vf_coef * value_loss
-
+                # print(f"loss: {loss.item():.5f}, policy: {policy_loss.item():.5f}, entropy: {entropy_loss.item():.2f}, value_loss: {value_loss.item():.2f}")
                 self.zero_all_grad()
                 loss.backward()
                 self.clip_gradient(self.max_grad_norm)
                 self.step_all()
+        # print(f"action max: {actions.max():.5f}, min: {actions.min():.5f}")
+        print(f"loss: {loss.item():.2f}, policy: {policy_loss.item():.2f}, entropy: {entropy_loss.item():.2f}, value_loss: {value_loss.item():.2f}")
+        # print(f"loss: {loss.item():.2f}")
 
         # return loss
     def _update_current_progress_remaining(self, num_timesteps: int, total_timesteps: int) -> None:
@@ -151,5 +180,11 @@ class PPOAgent(BaseAgent):
 
     def sample(self, batch_size):
         return self.replay_buffer.sample_recent_data(batch_size)
+    
+    def save(self, filepath):
+        torch.save({
+            'actor': self.actor.state_dict(),
+            'critic': self.critic.state_dict()
+        }, filepath)
 
     
