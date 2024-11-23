@@ -23,7 +23,7 @@ python3 climb/scripts/test_PPO.py --max_training_timesteps 1000000 --exp_name ep
 
 Run the custom `climber-v0` environment with 
 ```
-python3 climb/scripts/test_PPO.py --max_training_timesteps 3000000 --exp_name ep_len1000_lr5e-4_layer8_s64 -lr 5e-4 -l 8 -s 64 --ep_len 1000 --save_params --env_name Climber-v0 --xml_file 'assets/climber_v0.xml'
+python3 climb/scripts/test_PPO.py --max_training_timesteps 300000  --env_name Climber-v0 --xml_file 'assets/climber_v0.xml' --keyframe 'foot_up' --exp_name lr5e-4_layer8_s64 -lr 5e-4 -l 8 -s 64 --save_params
 ```
 You might need to tune the hyperparameters, and the loss computation for critic (`value_loss`) is dubious at the moment
 

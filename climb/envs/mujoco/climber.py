@@ -8,7 +8,7 @@ def mass_center(model, data):
     return (np.sum(mass * xpos, axis=0) / np.sum(mass)).copy()
 
 class Climber(HumanoidEnv):
-    def __init__(self, xml_file=None, **kwargs):
+    def __init__(self, xml_file=None, keyframe=None, **kwargs):
         render_mode = kwargs.get('render_mode', 'rgb_array')
         if xml_file is not None:
             super().__init__(xml_file=xml_file, render_mode=render_mode)
@@ -16,6 +16,7 @@ class Climber(HumanoidEnv):
             super().__init__(render_mode=render_mode)
         # self._upward_reward_weight = self._forward_reward_weight
         self._upward_reward_weight = 10.0
+        self.keyframe = keyframe
     
     @property
     def is_healthy(self):
@@ -58,8 +59,9 @@ class Climber(HumanoidEnv):
         rewards = upward_reward + healthy_reward
 
         ctrl_cost = self.control_cost(action)
-        contact_cost = self.contact_cost
-        costs = ctrl_cost + contact_cost
+        # contact_cost = self.contact_cost
+        # costs = ctrl_cost + contact_cost
+        costs = ctrl_cost
 
         reward = rewards - costs
 
@@ -67,14 +69,33 @@ class Climber(HumanoidEnv):
             "reward_survive": healthy_reward,
             "reward_upward": upward_reward,
             "reward_ctrl": -ctrl_cost,
-            "reward_contact": -contact_cost,
+            # "reward_contact": -contact_cost,
+            # "sensor_data": self.data.sensordata.copy()
         }
 
         return reward, reward_info
 
-    # def reset(self):
-    #     obs = super().reset()
-    #     return obs
+    def reset_model(self):
+        if self.keyframe is None:
+            return super().reset_model()
+        # print(f"Resetting model to keyframe '{self.keyframe}'")
+        noise_low = -self._reset_noise_scale
+        noise_high = self._reset_noise_scale
+
+        key_qpos = self.model.key(self.keyframe).qpos
+        key_qvel = self.model.key(self.keyframe).qvel
+
+        qpos = key_qpos + self.np_random.uniform(
+            low=noise_low, high=noise_high, size=self.model.nq
+        )
+        qvel = key_qvel + self.np_random.uniform(
+            low=noise_low, high=noise_high, size=self.model.nv
+        )
+        self.set_state(qpos, qvel)
+
+        observation = self._get_obs()
+        return observation
+
 
     def render(self):
         return super().render()

@@ -39,7 +39,7 @@ class RL_Trainer(object):
 
         if self.params['xml_file'] is not None:
             xml_file = os.path.abspath(self.params['xml_file'])
-            self.env = gym.make(self.params['env_name'], xml_file=xml_file, render_mode="rgb_array")
+            self.env = gym.make(self.params['env_name'], xml_file=xml_file, keyframe=self.params['keyframe'] , render_mode="rgb_array")
         else:
             self.env = gym.make(self.params['env_name'], render_mode="rgb_array")
         self.env = RecordVideo(self.env, "videos/", episode_trigger=lambda episode_id: episode_id % 1000 == 1, name_prefix=self.params['env_name'])

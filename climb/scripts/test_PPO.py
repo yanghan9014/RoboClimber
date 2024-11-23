@@ -64,10 +64,11 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--env_name', type=str, default='Humanoid-v5')
     parser.add_argument('--xml_file', type=str, default=None)
+    parser.add_argument('--keyframe', type=str, default=None)
     parser.add_argument('--ep_len', type=int, default=1000)
     parser.add_argument('--max_training_timesteps', type=int, default=1000)
     parser.add_argument('--exp_name', type=str, default='todo')
-    parser.add_argument('--policy_updates_per_rollout', type=int, default=5)
+    parser.add_argument('--policy_updates_per_rollout', type=int, default=10)
 
     parser.add_argument('--eval_batch_size', '-b', type=int, default=1000) 
     parser.add_argument('--eval_traj_n', type=int, default=10) 
@@ -114,7 +115,10 @@ def main():
     if not (os.path.exists(data_path)):
         os.makedirs(data_path)
 
-    logdir = args.exp_name + '_' + args.env_name + '_' + time.strftime("%d-%m-%Y_%H-%M-%S")
+    if args.keyframe is not None:
+        logdir = args.exp_name + '_' + args.env_name + '_' + args.keyframe + '_' + time.strftime("%d-%m-%Y_%H-%M-%S")
+    else:
+        logdir = args.exp_name + '_' + args.env_name + '_' + time.strftime("%d-%m-%Y_%H-%M-%S")
     logdir = os.path.join(data_path, logdir)
     params['logdir'] = logdir
     if not(os.path.exists(logdir)):

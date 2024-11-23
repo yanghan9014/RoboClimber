@@ -71,8 +71,9 @@
                             <geom fromto="0 0 0 0 0 -.3" name="right_shin1" size="0.049" type="capsule"/>
                             <body name="right_foot" pos="-0.02 0 -0.42">
                                 <joint armature="0.0028" axis="0 -1 0" name="right_ankle" pos="0.02 0 0" range="-20 20" stiffness="10" type="hinge"/>
-                                <geom name="right_foot" type="mesh" mesh="foot_mesh_right" pos="0 0 -0.03" user="0"/>
-                                <!-- <geom name="right_foot" pos="0 0 0.1" size="0.075" type="sphere" user="0"/> -->
+                                <!-- <geom name="right_foot" type="mesh" mesh="foot_mesh_right" pos="0 0 -0.03" user="0"/> -->
+                                <geom name="right_foot" fromto="-.06 .01 .018 .23 -.01 .018" size="0.05" type="box"/>
+                                <!-- <site name="foot_r" fromto="-.06 .01 .018 .23 -.01 .018" size="0.05" type="box" rgba="0 0 0 .9"/> -->
                             </body>
                         </body>
                     </body>
@@ -86,8 +87,9 @@
                             <geom fromto="0 0 0 0 0 -.3" name="left_shin1" size="0.049" type="capsule"/>
                             <body name="left_foot" pos="-0.02 0 -0.42">
                                 <joint armature="0.0028" axis="0 -1 0" name="left_ankle" pos="0.02 0 0" range="-20 20" stiffness="10" type="hinge"/>
-                                <geom name="left_foot" type="mesh" mesh="foot_mesh_left" pos="0 0 -0.03" user="0"/>
-                                <!-- <geom name="left_foot" type="sphere" size="0.075" pos="0 0 0.1" user="0" /> -->
+                                <!-- <geom name="left_foot" type="mesh" mesh="foot_mesh_left" pos="0 0 -0.03" user="0"/> -->
+                                <geom name="left_foot" fromto="-.06 -.01 .018 .23 .01 .018" size="0.05" type="box"/>
+                                <!-- <site name="foot_l" fromto="-.06 -.01 .018 .23 .01 .018" size="0.05" type="box" rgba="0 0 0 .9"/> -->
                             </body>
                         </body>
                     </body>
@@ -218,6 +220,10 @@
         <motor tendon="finger_tendon_r" ctrlrange="-0.4 0.4" gear="2000" name="fingers_r"/>
         <motor tendon="finger_tendon_l" ctrlrange="-0.4 0.4" gear="2000" name="fingers_l"/>
     </actuator>
+    <!-- <sensor>
+        <touch name="foot_l" site="foot_l"/>
+        <touch name="foot_r" site="foot_r"/>
+    </sensor> -->
     <keyframe>
         <key name="foot_up"
 qpos="
