@@ -76,10 +76,11 @@ class PPOMLPPolicy(BasePolicy, nn.Module, metaclass=abc.ABCMeta):
         observation = ptu.from_numpy(observation)
         action_distribution, _ = self.forward(observation)
         action = action_distribution.sample()
-        return ptu.to_numpy(action.squeeze()), action_distribution.log_prob(action)
+        epsilon = 1e-6
+        clipped_actions = torch.clamp(action, -(self.action_space_bound - epsilon), self.action_space_bound - epsilon)
+        return ptu.to_numpy(action.squeeze()), action_distribution.log_prob(clipped_actions)
 
     def forward(self, observation: torch.FloatTensor):
-
         if self.discrete:
             logits = self.logits_na(observation)
             action_distribution = distributions.Categorical(logits=logits)
@@ -89,9 +90,6 @@ class PPOMLPPolicy(BasePolicy, nn.Module, metaclass=abc.ABCMeta):
             scale_tril = torch.diag(self.std)
             batch_dim = batch_mean.shape[0]
             batch_scale_tril = scale_tril.repeat(batch_dim, 1, 1)
-            if torch.isnan(batch_mean).any() or torch.isnan(self.std).any():
-                # Sometimes the parameters randomly become nan. Still figuring out why
-                pdb.set_trace()
             base_distribution = distributions.MultivariateNormal(
                 batch_mean,
                 scale_tril=batch_scale_tril,
@@ -101,9 +99,8 @@ class PPOMLPPolicy(BasePolicy, nn.Module, metaclass=abc.ABCMeta):
             # Apply tanh transformation to enforce [-1, 1] range
             tanh_transform = TanhTransform()
             transformed_distribution = distributions.TransformedDistribution(base_distribution, [tanh_transform])
-            scale = torch.tensor(self.action_space_bound)
             action_distribution = distributions.TransformedDistribution(transformed_distribution, [
-                torch.distributions.transforms.AffineTransform(loc=0.0, scale=scale)
+                torch.distributions.transforms.AffineTransform(loc=0.0, scale=self.action_space_bound)
             ])
             return action_distribution, entropy
     

@@ -42,7 +42,7 @@ class RL_Trainer(object):
             self.env = gym.make(self.params['env_name'], xml_file=xml_file, keyframe=self.params['keyframe'] , render_mode="rgb_array")
         else:
             self.env = gym.make(self.params['env_name'], render_mode="rgb_array")
-        self.env = RecordVideo(self.env, "videos/", episode_trigger=lambda episode_id: episode_id % 1000 == 1, name_prefix=self.params['env_name'])
+        self.env = RecordVideo(self.env, "videos/", episode_trigger=lambda episode_id: episode_id % 1000 == 1, name_prefix=self.params['env_name']+'_'+self.params['keyframe'])
 
         
         self._last_obs = self.env.reset(seed=self.params['seed'])[0]
@@ -112,6 +112,7 @@ class RL_Trainer(object):
     
             if self.logmetrics:
                 print(f"============= num_timesteps: {self.num_timesteps} =============")
+                print(f"ppo_policy std: {self.agent.actor.std}")
                 self.perform_logging(self.num_timesteps, paths, self.agent.actor, None)
                 if self.params['save_params']:
                     self.agent.save('{}/agent_itr_{}.pt'.format(self.params['logdir'], self.num_timesteps))
@@ -125,8 +126,8 @@ class RL_Trainer(object):
         self.agent.eval_mode()
         n_steps = 0
         rollout_buffer.reset()
-        obs, acs, rews, next_obs, terminals = [], [], [], [], []
-        # obs, height, acs, rews, next_obs, terminals = [], [], [], [], [], []
+        # obs, acs, rews, next_obs, terminals = [], [], [], [], []
+        obs, height, acs, rews, next_obs, terminals = [], [], [], [], [], []
         self.env.reset(seed=self.params['seed'])
         self.params['seed'] += 1
         paths = []
@@ -137,9 +138,9 @@ class RL_Trainer(object):
                 actions, log_probs = self.agent.actor.get_action(self._last_obs)
                 values = self.agent.critic(_last_obs)
 
-            clipped_actions = np.clip(actions, self.env.action_space.low, self.env.action_space.high)
-            new_obs, rewards, dones, truncated, infos = env.step(clipped_actions)
-            # z_pos = infos['z_position']
+            # clipped_actions = np.clip(actions, self.env.action_space.low, self.env.action_space.high)
+            new_obs, rewards, dones, truncated, infos = env.step(actions)
+            z_pos = infos['z_position']
 
             self.num_timesteps += 1
 
@@ -168,15 +169,15 @@ class RL_Trainer(object):
 
             obs.append(self._last_obs)
             acs.append(actions)
-            # height.append(z_pos)
+            height.append(z_pos)
             rews.append(rewards)
             next_obs.append(new_obs)
             if dones or n_steps >= n_rollout_steps:
                 terminals.append(1)
-                # paths.append(Path_height(obs, height, acs, rews, next_obs, terminals))
-                paths.append(Path(obs, acs, rews, next_obs, terminals))
-                obs, acs, rews, next_obs, terminals = [], [], [], [], []
-                # obs, height, acs, rews, next_obs, terminals = [], [], [], [], [], []
+                paths.append(Path_height(obs, height, acs, rews, next_obs, terminals))
+                # paths.append(Path(obs, acs, rews, next_obs, terminals))
+                # obs, acs, rews, next_obs, terminals = [], [], [], [], []
+                obs, height, acs, rews, next_obs, terminals = [], [], [], [], [], []
                 self.env.reset(seed=self.params['seed'])
                 self.params['seed'] += 1
             else:
@@ -224,7 +225,6 @@ class RL_Trainer(object):
         # collect eval trajectories, for logging
         print("\nCollecting data for eval...")
         eval_paths, eval_envsteps_this_batch = sample_trajectories(self.env, eval_policy, self.params['eval_batch_size'], self.params['ep_len'])
-        # eval_paths = sample_n_trajectories(self.env, eval_policy, self.params['eval_traj_n'], self.params['ep_len'])
 
         # save eval metrics
         if self.logmetrics:
@@ -232,8 +232,8 @@ class RL_Trainer(object):
             train_returns = [path["reward"].sum() for path in paths]
             eval_returns = [eval_path["reward"].sum() for eval_path in eval_paths]
 
-            # train_max_height = [path["height"].max() for path in paths]
-            # eval_max_height = [eval_path["height"].max() for eval_path in eval_paths]
+            train_max_height = [path["height"].max() for path in paths]
+            eval_max_height = [eval_path["height"].max() for eval_path in eval_paths]
 
             # episode lengths, for logging
             train_ep_lens = [len(path["reward"]) for path in paths]
@@ -246,14 +246,14 @@ class RL_Trainer(object):
             logs["Eval_MaxReturn"] = np.max(eval_returns)
             logs["Eval_MinReturn"] = np.min(eval_returns)
             logs["Eval_AverageEpLen"] = np.mean(eval_ep_lens)
-            # logs["Eval_AverageMaxHeight"] = np.mean(eval_max_height)
+            logs["Eval_AverageMaxHeight"] = np.mean(eval_max_height)
 
             logs["Train_AverageReturn"] = np.mean(train_returns)
             logs["Train_StdReturn"] = np.std(train_returns)
             logs["Train_MaxReturn"] = np.max(train_returns)
             logs["Train_MinReturn"] = np.min(train_returns)
             logs["Train_AverageEpLen"] = np.mean(train_ep_lens)
-            # logs["Train_AverageMaxHeight"] = np.mean(train_max_height)
+            logs["Train_AverageMaxHeight"] = np.mean(train_max_height)
 
             # logs["Train_EnvstepsSoFar"] = self.total_envsteps
             logs["TimeSinceStart"] = time.time() - self.start_time

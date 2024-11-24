@@ -2,7 +2,7 @@
     <compiler angle="degree" inertiafromgeom="true"/>
     <default>
         <joint armature="1" damping="1" limited="true"/>
-        <geom conaffinity="1" condim="6" contype="1" margin="0.002" gap="0.002" material="geom" rgba="0.8 0.6 .4 1"  friction="2.0 .05 .05"/>
+        <geom conaffinity="1" condim="4" solref=".006 1" contype="1" margin=".00" gap=".00" material="geom" rgba="0.8 0.6 .4 1"  friction="2.0 .05 .05"/>
         <motor ctrllimited="true" ctrlrange="-.4 .4"/>
     </default>
     <option integrator="RK4" iterations="50" solver="PGS" timestep="0.003">
@@ -108,21 +108,21 @@
                         <geom name="right_palm" size="0.04" type="sphere"/> 
                         <body name="finger_base_r" pos=".02 .02 .02">
                             <joint armature="0.002" axis="0 1 -1" name="finger_base_joint_r" pos="0 0 0" range="10 80" stiffness="0.01" type="hinge"/>
-                            <geom name="finger_base_r1" fromto=".0 .02 -.02 .025 .045 .005" size="0.014" type="capsule"/> 
-                            <geom name="finger_base_r2" fromto=".0 .0 .0 .025 .025 .025" size="0.014" type="capsule"/> 
-                            <geom name="finger_base_r3" fromto=".0 -.02 .02 .025 .005 .045" size="0.014" type="capsule"/> 
+                            <geom name="finger_base_r1" fromto=".0 .02 -.02 .025 .045 .005" size=".012" type="capsule"/> 
+                            <geom name="finger_base_r2" fromto=".0 .0 .0 .025 .025 .025" size=".012" type="capsule"/> 
+                            <geom name="finger_base_r3" fromto=".0 -.02 .02 .025 .005 .045" size=".012" type="capsule"/> 
                             <site name="base_site_r" pos=".01 -.005 -.005" size="0.012" rgba="0 0 0 .2"/>
                             <body name="finger_mid_r" pos=".028 .028 .028">
                                 <joint armature="0.002" axis="0 1 -1" name="finger_mid_joint_r" pos="0 0 0" range="10 90" stiffness="0.01" type="hinge"/>
-                                <geom name="finger_mid_r1" fromto=".0 .02 -.02 .018 .038 -.002" size="0.014" type="capsule"/> 
-                                <geom name="finger_mid_r2" fromto=".0 .0 .0 .018 .018 .018" size="0.014" type="capsule"/> 
-                                <geom name="finger_mid_r3" fromto=".0 -.02 .02 .018 -.002 .038" size="0.014" type="capsule"/> 
+                                <geom name="finger_mid_r1" fromto=".0 .02 -.02 .018 .038 -.002" size=".012" type="capsule"/> 
+                                <geom name="finger_mid_r2" fromto=".0 .0 .0 .018 .018 .018" size=".012" type="capsule"/> 
+                                <geom name="finger_mid_r3" fromto=".0 -.02 .02 .018 -.002 .038" size=".012" type="capsule"/> 
                                 <site name="mid_site_r" pos=".01 -.005 -.005" size="0.012" rgba="0 0 0 .2"/>
                                 <body name="finger_tip_r" pos=".02 .02 .02">
                                     <joint armature="0.002" axis="0 1 -1" name="finger_tip_joint_r" pos="0 0 0" range="10 80" stiffness=".01" type="hinge"/>
-                                    <geom name="finger_tip_r1" fromto=".0 .02 -.02 .015 .035 -.005" size="0.014" type="capsule"/> 
-                                    <geom name="finger_tip_r2" fromto=".0 .0 .0 .015 .015 .015" size="0.014" type="capsule"/> 
-                                    <geom name="finger_tip_r3" fromto=".0 -.02 .02 .015 -.005 .035" size="0.014" type="capsule"/> 
+                                    <geom name="finger_tip_r1" fromto=".0 .02 -.02 .015 .035 -.005" size=".012" type="capsule"/> 
+                                    <geom name="finger_tip_r2" fromto=".0 .0 .0 .015 .015 .015" size=".012" type="capsule"/> 
+                                    <geom name="finger_tip_r3" fromto=".0 -.02 .02 .015 -.005 .035" size=".012" type="capsule"/> 
                                     <site name="top_site_r" pos=".01 -.005 -.005" size="0.012" rgba="0 0 0 .2"/>
                                     <site name="tip_site_r" pos=".025 .01 .01" size="0.012" rgba="0 0 0 .2"/>
                                 </body>
@@ -145,21 +145,21 @@
                         <geom name="left_palm" size="0.04" type="sphere"/> 
                         <body name="finger_base_l" pos=".02 -.02 .02">
                             <joint armature="0.002" axis="0 1 1" name="finger_base_joint_l" pos="0 0 0" range="10 80" stiffness=".01" type="hinge"/>
-                            <geom name="finger_base_l1" fromto=".0 -.02 -.02 .025 -.045 .005" size="0.014" type="capsule"/> 
-                            <geom name="finger_base_l2" fromto=".0 .0 .0  .025 -.025 .025" size="0.014" type="capsule"/> 
-                            <geom name="finger_base_l3" fromto=".0 .02 .02 .025 -.005 .045" size="0.014" type="capsule"/> 
+                            <geom name="finger_base_l1" fromto=".0 -.02 -.02 .025 -.045 .005" size=".012" type="capsule"/> 
+                            <geom name="finger_base_l2" fromto=".0 .0 .0  .025 -.025 .025" size=".012" type="capsule"/> 
+                            <geom name="finger_base_l3" fromto=".0 .02 .02 .025 -.005 .045" size=".012" type="capsule"/> 
                             <site name="base_site_l" pos=".01 .005 -.005" size="0.012" rgba="0 0 0 .2"/>
                             <body name="finger_mid_l" pos=".028 -.028 .028">
                                 <joint armature="0.002" axis="0 1 1" name="finger_mid_joint_l" pos="0 0 0" range="10 90" stiffness=".01" type="hinge"/>
-                                <geom name="finger_mid_l1" fromto=".0 -.02 -.02 .018 -.038 -.002" size="0.014" type="capsule"/> 
-                                <geom name="finger_mid_l2" fromto=".0 .0 .0 .018 -.018 .018" size="0.014" type="capsule"/> 
-                                <geom name="finger_mid_l3" fromto=".0 .02 .02 .018 .002 .038" size="0.014" type="capsule"/> 
+                                <geom name="finger_mid_l1" fromto=".0 -.02 -.02 .018 -.038 -.002" size=".012" type="capsule"/> 
+                                <geom name="finger_mid_l2" fromto=".0 .0 .0 .018 -.018 .018" size=".012" type="capsule"/> 
+                                <geom name="finger_mid_l3" fromto=".0 .02 .02 .018 .002 .038" size=".012" type="capsule"/> 
                                 <site name="mid_site_l" pos=".01 .005 -.005" size="0.012" rgba="0 0 0 .2"/>
                                 <body name="finger_tip_l" pos=".02 -.02 .02">
                                     <joint armature="0.002" axis="0 1 1" name="finger_tip_joint_l" pos="0 0 0" range="10 80" stiffness=".01" type="hinge"/>
-                                    <geom name="finger_tip_l1" fromto=".0 -.02 -.02 .015 -.035 -.005" size="0.014" type="capsule"/> 
-                                    <geom name="finger_tip_l2" fromto=".0 .0 .0 .015 -.015 .015" size="0.014" type="capsule"/> 
-                                    <geom name="finger_tip_l3" fromto=".0 .02 .02 .015 .005 .035" size="0.014" type="capsule"/> 
+                                    <geom name="finger_tip_l1" fromto=".0 -.02 -.02 .015 -.035 -.005" size=".012" type="capsule"/> 
+                                    <geom name="finger_tip_l2" fromto=".0 .0 .0 .015 -.015 .015" size=".012" type="capsule"/> 
+                                    <geom name="finger_tip_l3" fromto=".0 .02 .02 .015 .005 .035" size=".012" type="capsule"/> 
                                     <site name="top_site_l" pos=".01 .005 -.005" size="0.012" rgba="0 0 0 .2"/>
                                     <site name="tip_site_l" pos=".025 -.01 .01" size="0.012" rgba="0 0 0 .2"/>
                                 </body>
@@ -262,32 +262,6 @@ qpos="
    0       
    0.64    
    1       
-   0.83" 
-ctrl="
-   0       
-   0       
-   0       
-   0       
-   0       
-   0       
-   0       
-   0       
-   0       
-   0       
-   0       
-   0       
-   0       
-   0       
-   0       
-   0       
-   0       
-   0       
-   0       
-   0       
-   0       
-   0       
-   0       
-  -0.4
-  -0.4"/>
+   0.83"/>
     </keyframe>
 </mujoco>

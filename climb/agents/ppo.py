@@ -21,7 +21,7 @@ class PPOAgent(BaseAgent):
 
 
         self.agent_params = agent_params
-        self.action_space_bound = env.action_space.high
+        self.action_space_bound = torch.tensor(env.action_space.high)
         self.policy_updates_per_rollout = self.agent_params['policy_updates_per_rollout']
         self.batch_size = self.agent_params['batch_size']
         self.max_grad_norm = self.agent_params['max_grad_norm']
@@ -79,8 +79,9 @@ class PPOAgent(BaseAgent):
                 
                 distribution, entropy = self.actor(observations)
                 values = self.critic(observations).squeeze(1)
-                log_prob = distribution.log_prob(actions)
-                # entropy = distribution.entropy()
+                epsilon = 1e-6
+                clipped_actions = torch.clamp(actions, -(self.action_space_bound - epsilon), self.action_space_bound - epsilon)
+                log_prob = distribution.log_prob(clipped_actions)
 
                 advantages = rollout_data.advantages
                 if self.standardize_advantages:
@@ -91,10 +92,6 @@ class PPOAgent(BaseAgent):
                 policy_loss_1 = advantages * ratio
                 policy_loss_2 = advantages * torch.clamp(ratio, 1 - clip_range, 1 + clip_range)
                 policy_loss = -torch.min(policy_loss_1, policy_loss_2).mean()
-                # print("============================================")
-                # print(f"ratio: {ratio}")
-                # print(f"policy_loss_1: {policy_loss_1.mean():2f}, {policy_loss_2.mean():2f}")
-                # pdb.set_trace()
 
                 # some ppl do value clipping 
                 if self.clip_range_vf is None:
@@ -108,24 +105,21 @@ class PPOAgent(BaseAgent):
                     )
 
                 value_loss = self.MseLoss(rollout_data.returns, values_pred.squeeze())
-                # print(rollout_data.returns)
-                # print(values_pred.squeeze())
-                # pdb.set_trace()
-
-                if entropy is None:
-                    # Approximate entropy when no analytical form
-                    entropy_loss = -torch.mean(-log_prob)
-                else:
-                    entropy_loss = -torch.mean(entropy)
+                # if entropy is None:
+                #     # Approximate entropy when no analytical form
+                #     entropy_loss = -torch.mean(-log_prob)
+                # else:
+                #     entropy_loss = -torch.mean(entropy)
                 
-                loss = policy_loss + self.ent_coef * entropy_loss + self.vf_coef * value_loss
+                loss = policy_loss + self.vf_coef * value_loss
+                # loss = policy_loss + self.ent_coef * entropy_loss + self.vf_coef * value_loss
                 # print(f"loss: {loss.item():.5f}, policy: {policy_loss.item():.5f}, entropy: {entropy_loss.item():.2f}, value_loss: {value_loss.item():.2f}")
                 self.zero_all_grad()
                 loss.backward()
                 self.clip_gradient(self.max_grad_norm)
                 self.step_all()
         # print(f"action max: {actions.max():.5f}, min: {actions.min():.5f}")
-        print(f"loss: {loss.item():.2f}, policy: {policy_loss.item():.2f}, entropy: {entropy_loss.item():.2f}, value_loss: {value_loss.item():.2f}")
+        print(f"loss: {loss.item():.2f}, policy: {policy_loss.item():.2f}, value_loss: {value_loss.item():.2f}")
         # print(f"loss: {loss.item():.2f}")
 
         # return loss

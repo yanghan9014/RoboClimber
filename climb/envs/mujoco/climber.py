@@ -1,6 +1,7 @@
 import numpy as np
 import gymnasium as gym
 from gymnasium.envs.mujoco.humanoid_v5 import HumanoidEnv
+import pdb
 
 def mass_center(model, data):
     mass = np.expand_dims(model.body_mass, axis=1)
@@ -14,8 +15,8 @@ class Climber(HumanoidEnv):
             super().__init__(xml_file=xml_file, render_mode=render_mode)
         else:
             super().__init__(render_mode=render_mode)
-        # self._upward_reward_weight = self._forward_reward_weight
-        self._upward_reward_weight = 10.0
+        self._healthy_reward = 1
+        self._upward_reward_weight = 50.0
         self.keyframe = keyframe
     
     @property
@@ -25,7 +26,21 @@ class Climber(HumanoidEnv):
         return is_healthy
 
     def step(self, action):
+        # print(self.data.cfrc_ext)
+        # print(f"ladder: {self.data.cfrc_ext[1]}")
+        # print(f"right_foot: {self.data.cfrc_ext[7]}")
+        # print(f"left_foot: {self.data.cfrc_ext[10]}")
+        # print(f"finger_base_r: {self.data.cfrc_ext[14]}")
+        # print(f"finger_mid_r: {self.data.cfrc_ext[15]}")
+        # print(f"finger_tip_r: {self.data.cfrc_ext[16]}")
+        # print(f"finger_base_l: {self.data.cfrc_ext[20]}")
+        # print(f"finger_mid_l: {self.data.cfrc_ext[21]}")
+        # print(f"finger_tip_l: {self.data.cfrc_ext[22]}")
+        # print(f"total x force: {sum([f[0] for f in self.data.cfrc_ext])}")
+        # print(f"total y force: {sum([f[1] for f in self.data.cfrc_ext])}")
+        # print(f"total z force: {sum([f[2] for f in self.data.cfrc_ext])}")
         xyz_position_before = mass_center(self.model, self.data)
+        # print(f"xyz_position_before: {xyz_position_before}")
         self.do_simulation(action, self.frame_skip)
         xyz_position_after = mass_center(self.model, self.data)
 
@@ -54,7 +69,7 @@ class Climber(HumanoidEnv):
         return observation, reward, terminated, False, info
 
     def _get_rew(self, z_velocity: float, action):
-        upward_reward = self._upward_reward_weight * z_velocity
+        upward_reward = max(0.0, self._upward_reward_weight * z_velocity)
         healthy_reward = self.healthy_reward
         rewards = upward_reward + healthy_reward
 

@@ -68,7 +68,7 @@ def main():
     parser.add_argument('--ep_len', type=int, default=1000)
     parser.add_argument('--max_training_timesteps', type=int, default=1000)
     parser.add_argument('--exp_name', type=str, default='todo')
-    parser.add_argument('--policy_updates_per_rollout', type=int, default=10)
+    parser.add_argument('--policy_updates_per_rollout', type=int, default=5)
 
     parser.add_argument('--eval_batch_size', '-b', type=int, default=1000) 
     parser.add_argument('--eval_traj_n', type=int, default=10) 
@@ -78,7 +78,7 @@ def main():
     parser.add_argument('--ent_coef', type=float, default=0.0)
     parser.add_argument('--max_grad_norm', type=float, default=0.5)
     parser.add_argument('--clip_range', type=float, default=0.2)
-    parser.add_argument('--clip_range_vf', type=float, default=None)
+    parser.add_argument('--clip_range_vf', type=float, default=0.2)
 
     parser.add_argument('--learning_rate', '-lr', type=float, default=5e-3)
     parser.add_argument('--gae_lambda', type=float, default=1)
