@@ -80,15 +80,18 @@ class PPOAgent(BaseAgent):
                 distribution, entropy = self.actor(observations)
                 values = self.critic(observations).squeeze(1)
                 epsilon = 1e-6
-                clipped_actions = torch.clamp(actions, -(self.action_space_bound - epsilon), self.action_space_bound - epsilon)
-                log_prob = distribution.log_prob(clipped_actions)
-
+                # clipped_actions = torch.clamp(actions, -(self.action_space_bound - epsilon), self.action_space_bound - epsilon)
+                normalized_actions = actions / self.action_space_bound
+                
+                # log_prob = distribution.log_prob(clipped_actions)
+                log_prob = distribution.log_prob(normalized_actions)
+                print(log_prob)
                 advantages = rollout_data.advantages
                 if self.standardize_advantages:
                     advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
                 
                 ratio = torch.exp(log_prob - rollout_data.old_log_prob)
-
+                print(f"ratio: {ratio}")
                 policy_loss_1 = advantages * ratio
                 policy_loss_2 = advantages * torch.clamp(ratio, 1 - clip_range, 1 + clip_range)
                 policy_loss = -torch.min(policy_loss_1, policy_loss_2).mean()

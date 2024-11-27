@@ -13,6 +13,62 @@ import pdb
 
 device = ptu.device
 
+
+class TruncatedNormal(distributions.Distribution):
+    def __init__(self, mean, scale_tril, min_val, max_val):
+        self.mea = mean
+        self.scale_tril = scale_tril
+        self.min_val = min_val
+        self.max_val = max_val
+        self._normal = distributions.MultivariateNormal(mean, scale_tril=scale_tril)
+        
+        # Calculate the total probability mass in the truncated region
+        self.total_prob = self._normal.cdf(max_val) - self._normal.cdf(min_val)
+
+    def sample(self, sample_shape=torch.Size()):
+        """
+        Sample from the truncated normal distribution.
+        """
+        size = sample_shape
+        tmp = self._normal.sample(size)  # Sample from MultivariateNormal
+        
+        # Check which values are valid (inside the truncation bounds)
+        valid = (tmp >= self.min_val) & (tmp <= self.max_val)
+        
+        # Gather the valid samples
+        valid_samples = tmp[valid]
+        
+        # Rescale to the desired mean and std
+        valid_samples.mul_(self.std).add_(self.mea)
+        
+        return valid_samples
+
+    def log_prob(self, value):
+        """
+        Compute the log-probability for the truncated normal distribution.
+        """
+        # Ensure the value is within the truncated bounds
+        if torch.any((value < self.min_val) | (value > self.max_val)):
+            return torch.full_like(value, float('-inf'))
+        
+        # Calculate the log-probability for the normal distribution
+        log_prob = self._normal.log_prob(value)
+        
+        # Normalize the PDF to the truncated region (uniform-like inside the truncated region)
+        log_prob -= torch.log(self.total_prob)
+        
+        return log_prob
+
+    def cdf(self, value):
+        """
+        Compute the CDF for the truncated normal distribution.
+        """
+        # Calculate the CDF for the normal distribution
+        cdf_val = self._normal.cdf(value)
+        
+        # Normalize the CDF to the truncated region
+        return (cdf_val - self._normal.cdf(self.min_val)) / self.total_prob
+
 class PPOMLPPolicy(BasePolicy, nn.Module, metaclass=abc.ABCMeta):
     def __init__(self,
                  ac_dim,
@@ -54,7 +110,7 @@ class PPOMLPPolicy(BasePolicy, nn.Module, metaclass=abc.ABCMeta):
                                       output_size=self.ac_dim,
                                       n_layers=self.n_layers, size=self.size)
             self.std = nn.Parameter(
-                torch.ones(self.ac_dim, dtype=torch.float32, device=ptu.device)
+                0.2*torch.ones(self.ac_dim, dtype=torch.float32, device=ptu.device)
             )
             self.mean_net.to(ptu.device)
             self.std.to(ptu.device)
@@ -75,11 +131,17 @@ class PPOMLPPolicy(BasePolicy, nn.Module, metaclass=abc.ABCMeta):
 
         observation = ptu.from_numpy(observation)
         action_distribution, _ = self.forward(observation)
-        action = action_distribution.sample()
+        action = action_distribution.rsample()
+        # print('###################')
+        # action_tanh = torch.tanh(action)
+        action_scaled = action * self.action_space_bound
+        
         epsilon = 1e-6
         clipped_actions = torch.clamp(action, -(self.action_space_bound - epsilon), self.action_space_bound - epsilon)
-        return ptu.to_numpy(action.squeeze()), action_distribution.log_prob(clipped_actions)
-
+        # return ptu.to_numpy(action.squeeze()), action_distribution.log_prob(clipped_actions)
+        # return ptu.to_numpy(clipped_actions.squeeze()), action_distribution.log_prob(clipped_actions)
+        return ptu.to_numpy(action_scaled.squeeze()), action_distribution.log_prob(action)
+    
     def forward(self, observation: torch.FloatTensor):
         if self.discrete:
             logits = self.logits_na(observation)
@@ -87,6 +149,7 @@ class PPOMLPPolicy(BasePolicy, nn.Module, metaclass=abc.ABCMeta):
             return action_distribution
         else:
             batch_mean = self.mean_net(observation)
+            # scale_tril = torch.diag(self.std)
             scale_tril = torch.diag(self.std)
             batch_dim = batch_mean.shape[0]
             batch_scale_tril = scale_tril.repeat(batch_dim, 1, 1)
@@ -94,6 +157,12 @@ class PPOMLPPolicy(BasePolicy, nn.Module, metaclass=abc.ABCMeta):
                 batch_mean,
                 scale_tril=batch_scale_tril,
             )
+            # base_distribution = TruncatedNormal(batch_mean, batch_scale_tril, batch_mean-1, batch_mean+1)
+            # base_distribution = torch.distributions.Normal(batch_mean, torch.exp(self.std))
+
+            # print(base_distribution)
+            # base_distribution = torch.distributions.Normal(batch_mean, torch.exp(self.std))
+            # print(base_distribution)
             entropy = base_distribution.entropy()
 
             # Apply tanh transformation to enforce [-1, 1] range
@@ -102,7 +171,12 @@ class PPOMLPPolicy(BasePolicy, nn.Module, metaclass=abc.ABCMeta):
             action_distribution = distributions.TransformedDistribution(transformed_distribution, [
                 torch.distributions.transforms.AffineTransform(loc=0.0, scale=self.action_space_bound)
             ])
-            return action_distribution, entropy
+            # action_distribution = distributions.TransformedDistribution(base_distribution, [
+                # torch.distributions.transforms.AffineTransform(loc=0.0, scale=self.action_space_bound)
+            # ])
+            # return base_distribution, entropy
+            # return action_distribution, entropy
+            return transformed_distribution, entropy
     
     def update(self):
 

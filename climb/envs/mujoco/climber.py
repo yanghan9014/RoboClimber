@@ -78,7 +78,7 @@ class Climber(HumanoidEnv):
         # costs = ctrl_cost + contact_cost
         costs = ctrl_cost
 
-        reward = rewards - costs
+        reward = rewards #- costs
 
         reward_info = {
             "reward_survive": healthy_reward,
