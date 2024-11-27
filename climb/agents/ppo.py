@@ -82,9 +82,9 @@ class PPOAgent(BaseAgent):
                 epsilon = 1e-6
                 # clipped_actions = torch.clamp(actions, -(self.action_space_bound - epsilon), self.action_space_bound - epsilon)
                 normalized_actions = actions / self.action_space_bound
-                
+                clipped_actions = torch.clamp(normalized_actions, -(1 - epsilon), 1 - epsilon)
                 # log_prob = distribution.log_prob(clipped_actions)
-                log_prob = distribution.log_prob(normalized_actions)
+                log_prob = distribution.log_prob(clipped_actions)
                 print(log_prob)
                 advantages = rollout_data.advantages
                 if self.standardize_advantages:
