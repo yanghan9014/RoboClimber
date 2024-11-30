@@ -35,10 +35,12 @@ class PPO_Trainer(object):
             'batch_size': params['batch_size'],
             'max_grad_norm': params['max_grad_norm'],
             'policy_updates_per_rollout': params['policy_updates_per_rollout'],
+            'critic_updates_per_policy_update': params['critic_updates_per_policy_update'],
             'ent_coef': params['ent_coef'],
             'vf_coef': params['vf_coef'],
             'clip_range': params['clip_range'],
             'clip_range_vf': params['clip_range_vf'],
+            'normalize_value_est': params['normalize_value_est'],
         }
 
         agent_params = {**computation_graph_args, **estimate_advantage_args, **train_args}
@@ -69,23 +71,25 @@ def main():
     parser.add_argument('--max_training_timesteps', type=int, default=1000)
     parser.add_argument('--exp_name', type=str, default='todo')
     parser.add_argument('--policy_updates_per_rollout', type=int, default=5)
+    parser.add_argument('--critic_updates_per_policy_update', type=int, default=1)
 
     parser.add_argument('--eval_batch_size', '-b', type=int, default=1000) 
     parser.add_argument('--eval_traj_n', type=int, default=10) 
     parser.add_argument('--batch_size', type=int, default=1000) 
 
-    parser.add_argument('--vf_coef', type=float, default=0.5)
+    parser.add_argument('--vf_coef', type=float, default=1)
     parser.add_argument('--ent_coef', type=float, default=0.0)
-    parser.add_argument('--max_grad_norm', type=float, default=0.5)
+    parser.add_argument('--max_grad_norm', type=float, default=None)
     parser.add_argument('--clip_range', type=float, default=0.2)
-    parser.add_argument('--clip_range_vf', type=float, default=0.2)
+    parser.add_argument('--clip_range_vf', type=float, default=None)
+    parser.add_argument('--normalize_value_est', action='store_true')
 
-    parser.add_argument('--learning_rate', '-lr', type=float, default=5e-3)
+    parser.add_argument('--learning_rate', '-lr', type=float, default=5e-4)
     parser.add_argument('--gae_lambda', type=float, default=1)
     parser.add_argument('--gamma', type=float, default=0.99)
     parser.add_argument('--dont_standardize_advantages', '-dsa', action='store_true')
-    parser.add_argument('--n_layers', '-l', type=int, default=2)
-    parser.add_argument('--size', '-s', type=int, default=64)
+    parser.add_argument('--n_layers', '-l', type=int, default=4)
+    parser.add_argument('--size', '-s', type=int, default=128)
 
     parser.add_argument('--seed', type=int, default=1)
     parser.add_argument('--no_gpu', '-ngpu', action='store_true')

@@ -23,6 +23,7 @@ class PPOAgent(BaseAgent):
         self.agent_params = agent_params
         self.action_space_bound = torch.tensor(env.action_space.high)
         self.policy_updates_per_rollout = self.agent_params['policy_updates_per_rollout']
+        self.critic_updates_per_policy_update = self.agent_params['critic_updates_per_policy_update']
         self.batch_size = self.agent_params['batch_size']
         self.max_grad_norm = self.agent_params['max_grad_norm']
         self.ent_coef = self.agent_params['ent_coef']
@@ -61,7 +62,13 @@ class PPOAgent(BaseAgent):
             self.agent_params['learning_rate']
         )
 
-        self.rollout_buffer = buffers.RolloutBuffer(buffer_size=ep_len, observation_space=env.observation_space, action_space=env.action_space, device=ptu.device, gamma=self.gamma, n_envs=1)
+        self.rollout_buffer = buffers.RolloutBuffer(buffer_size=ep_len, \
+                                                    observation_space=env.observation_space, \
+                                                    action_space=env.action_space, \
+                                                    device=ptu.device, \
+                                                    gamma=self.gamma, \
+                                                    n_envs=1, \
+                                                    normalize_value=self.agent_params['normalize_value_est'])
 
     def train(self):
         
@@ -78,11 +85,9 @@ class PPOAgent(BaseAgent):
                     actions = rollout_data.actions.long().flatten()
                 
                 distribution, entropy = self.actor(observations)
-                values = self.critic(observations).squeeze(1)
-                epsilon = 1e-6
-                clipped_actions = torch.clamp(actions, -(self.action_space_bound - epsilon), self.action_space_bound - epsilon)
-                log_prob = distribution.log_prob(clipped_actions)
-
+                # epsilon = 1e-6
+                # clipped_actions = torch.clamp(actions, -(self.action_space_bound - epsilon), self.action_space_bound - epsilon)
+                log_prob = distribution.log_prob(actions).sum(-1)
                 advantages = rollout_data.advantages
                 if self.standardize_advantages:
                     advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
@@ -92,37 +97,49 @@ class PPOAgent(BaseAgent):
                 policy_loss_1 = advantages * ratio
                 policy_loss_2 = advantages * torch.clamp(ratio, 1 - clip_range, 1 + clip_range)
                 policy_loss = -torch.min(policy_loss_1, policy_loss_2).mean()
+                # print(f"ratio mean {ratio.mean()}")
+                # print(f"ratio max {ratio.max():.2f}")
+                # print(f"ratio min {ratio.min()}")
 
-                # some ppl do value clipping 
-                if self.clip_range_vf is None:
-                    # No clipping
-                    values_pred = values
-                else:
-                    # Clip the difference between old and new value
-                    # NOTE: this depends on the reward scaling
-                    values_pred = rollout_data.old_values + torch.clamp(
-                        values - rollout_data.old_values, -clip_range_vf, clip_range_vf
-                    )
-
-                value_loss = self.MseLoss(rollout_data.returns, values_pred.squeeze())
                 # if entropy is None:
                 #     # Approximate entropy when no analytical form
                 #     entropy_loss = -torch.mean(-log_prob)
                 # else:
                 #     entropy_loss = -torch.mean(entropy)
                 
-                loss = policy_loss + self.vf_coef * value_loss
+                for _ in range(self.agent_params['critic_updates_per_policy_update']):
+                    values = self.critic(observations).squeeze(1)
+                    if self.clip_range_vf is None:
+                        values_pred = values
+                    else:
+                        # Clip the difference between old and new value
+                        # NOTE: this depends on the reward scaling
+                        values_pred = rollout_data.old_values + torch.clamp(
+                            values - rollout_data.old_values, -clip_range_vf, clip_range_vf
+                        )
+                    value_loss = self.MseLoss(values_pred.squeeze(), rollout_data.returns)
+                    critic_loss = self.vf_coef * value_loss
+                    self.critic.optimizer.zero_grad()
+                    critic_loss.backward()
+                    if self.max_grad_norm is not None:
+                        grad_norm_critic = torch.nn.utils.clip_grad_norm_(self.critic.parameters(), self.max_grad_norm)
+                    self.critic.optimizer.step()
+                
                 # loss = policy_loss + self.ent_coef * entropy_loss + self.vf_coef * value_loss
-                # print(f"loss: {loss.item():.5f}, policy: {policy_loss.item():.5f}, entropy: {entropy_loss.item():.2f}, value_loss: {value_loss.item():.2f}")
-                self.zero_all_grad()
-                loss.backward()
-                self.clip_gradient(self.max_grad_norm)
-                self.step_all()
-        # print(f"action max: {actions.max():.5f}, min: {actions.min():.5f}")
-        print(f"loss: {loss.item():.2f}, policy: {policy_loss.item():.2f}, value_loss: {value_loss.item():.2f}")
-        # print(f"loss: {loss.item():.2f}")
-
-        # return loss
+                self.actor.optimizer.zero_grad()
+                policy_loss.backward()
+                if self.max_grad_norm is not None:
+                    grad_norm_actor = torch.nn.utils.clip_grad_norm_(self.actor.parameters(), self.max_grad_norm)
+                self.actor.optimizer.step()
+                
+        print(f"p loss:{policy_loss.item():.2f}, "
+              f"v loss:{value_loss.item():.2f}, "
+              f"ratio max:{ratio.max():.2f}, "
+              f"std:{torch.exp(self.actor.logstd).mean():.2f}, "
+              f"v mean:{self.rollout_buffer.value_mean:.2f}, "
+              f"v std:{self.rollout_buffer.value_std:.2f}, ")
+            #   f"cri grad:{grad_norm_critic:.2f}, "
+            #   f"act grad:{grad_norm_actor:.2f}")
     def _update_current_progress_remaining(self, num_timesteps: int, total_timesteps: int) -> None:
         """
         Compute current progress remaining (starts from 1 and ends to 0)

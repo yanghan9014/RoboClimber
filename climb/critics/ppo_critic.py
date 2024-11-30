@@ -27,7 +27,8 @@ class PPOCritic(nn.Module):
         self.learning_rate = learning_rate
         self.training = training
 
-        self.value_net = ptu.build_mlp(input_size=self.ob_dim, output_size=1, n_layers=self.n_layers, size=self.size).to(ptu.device)
+        # self.value_net = ptu.build_mlp(input_size=self.ob_dim, output_size=1, n_layers=self.n_layers, size=self.size).to(ptu.device)
+        self.value_net = ptu.build_mlp(input_size=self.ob_dim, output_size=1, n_layers=self.n_layers, size=self.size, activation='leaky_relu').to(ptu.device)
         self.optimizer = optim.Adam(
                 self.value_net.parameters(),
                 self.learning_rate

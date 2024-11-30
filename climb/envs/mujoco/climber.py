@@ -16,8 +16,21 @@ class Climber(HumanoidEnv):
         else:
             super().__init__(render_mode=render_mode)
         self._healthy_reward = 1
-        self._upward_reward_weight = 50.0
         self.keyframe = keyframe
+
+        ladder_id = self.model.body('ladder').id
+        # The geom id of the ladder rungs
+        rung_low = self.model.body_geomadr[ladder_id]
+        rung_high = rung_low + self.model.body_geomnum[ladder_id]
+        self.rung_range = np.arange(rung_low, rung_high)
+        self._highest_reached_rung_reset_value = rung_low + 7 # assume the 6th rung can be reached with ease
+        self.highest_reached_rung = self._highest_reached_rung_reset_value
+
+        # Define reward weights
+        # give higher reward then punishment
+        self.milestone_reward = 50
+        self.upward_reward_weight = 50.0
+        self.downward_reward_weight = 0.0
     
     @property
     def is_healthy(self):
@@ -60,6 +73,7 @@ class Climber(HumanoidEnv):
             "x_velocity": x_velocity,
             "y_velocity": y_velocity,
             "z_velocity": z_velocity,
+            "highest_reached_rung": self.highest_reached_rung,
             **reward_info,
         }
 
@@ -69,9 +83,25 @@ class Climber(HumanoidEnv):
         return observation, reward, terminated, False, info
 
     def _get_rew(self, z_velocity: float, action):
-        upward_reward = max(0.0, self._upward_reward_weight * z_velocity)
+        # clip_z = 0.5
+        if z_velocity > 0:
+            upward_reward = self.upward_reward_weight * z_velocity
+            # upward_reward = self.upward_reward_weight * min(clip_z, z_velocity)
+        else:
+            upward_reward = self.downward_reward_weight * z_velocity
         healthy_reward = self.healthy_reward
+
+        # reached_milestone = 0
+        # contact_geoms = self.data.contact.geom.ravel()
+        # contact_rungs = contact_geoms[np.isin(contact_geoms, self.rung_range)] 
+        # if contact_rungs.size > 0 and contact_rungs.max() > self.highest_reached_rung:
+        #     reached_milestone = 1
+        #     self.highest_reached_rung = contact_rungs.max()
+        # milestone_reward = self.milestone_reward * reached_milestone
+        # conatct_reward =
+        
         rewards = upward_reward + healthy_reward
+        # rewards = upward_reward + healthy_reward + milestone_reward
 
         ctrl_cost = self.control_cost(action)
         # contact_cost = self.contact_cost
@@ -96,10 +126,8 @@ class Climber(HumanoidEnv):
         # print(f"Resetting model to keyframe '{self.keyframe}'")
         noise_low = -self._reset_noise_scale
         noise_high = self._reset_noise_scale
-
         key_qpos = self.model.key(self.keyframe).qpos
         key_qvel = self.model.key(self.keyframe).qvel
-
         qpos = key_qpos + self.np_random.uniform(
             low=noise_low, high=noise_high, size=self.model.nq
         )
@@ -107,6 +135,8 @@ class Climber(HumanoidEnv):
             low=noise_low, high=noise_high, size=self.model.nv
         )
         self.set_state(qpos, qvel)
+        
+        self.highest_reached_rung = self._highest_reached_rung_reset_value
 
         observation = self._get_obs()
         return observation

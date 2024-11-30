@@ -91,17 +91,14 @@ def sample_trajectory(env, policy, max_path_length, render=False, render_mode=('
     obs = env.reset()
     if isinstance(obs, tuple):
         obs = obs[0]
-    # obses, acts, rews, nobses, terms = [], [], [], [], []
-    obses, acts, rews, nobses, terms, heights = [], [], [], [], [], []
+    obses, acts, rews, nobses, terms = [], [], [], [], []
     steps = 0
     while True:
-
         obses.append(obs)
         act = policy.get_action(obs)
         act = act[0]
         acts.append(act)
         nobs, rew, done, _, info = env.step(act)
-        heights.append(info['z_position'])
         nobses.append(nobs)
         rews.append(rew)
         obs = nobs.copy()
@@ -112,8 +109,30 @@ def sample_trajectory(env, policy, max_path_length, render=False, render_mode=('
             break
         else:
             terms.append(0)
+    return Path(obses, acts, rews, nobses, terms)
 
-    # return Path(obses, acts, rews, nobses, terms)
+def sample_trajectory_climber(env, policy, max_path_length, render=False, render_mode=('rgb_array')):
+    obs = env.reset()
+    if isinstance(obs, tuple):
+        obs = obs[0]
+    obses, acts, rews, nobses, terms, heights = [], [], [], [], [], []
+    steps = 0
+    while True:
+        obses.append(obs)
+        act = policy.get_action(obs)
+        act = act[0]
+        acts.append(act)
+        nobs, rew, done, _, info = env.step(act)
+        heights.append(info['z_position'])
+        nobses.append(nobs)
+        rews.append(rew)
+        obs = nobs.copy()
+        steps += 1
+        if done or steps > max_path_length:
+            terms.append(1)
+            break
+        else:
+            terms.append(0)
     return Path_height(obses, heights, acts, rews, nobses, terms)
 
 
@@ -130,6 +149,28 @@ def sample_trajectories(
     paths = []
     while timesteps_this_batch < min_timesteps_per_batch:
         path = sample_trajectory(env, policy, max_path_length, render, render_mode)
+        paths.append(path)
+        timesteps_this_batch += get_pathlength(path)
+        print(
+            "sampled {}/{} timesteps".format(timesteps_this_batch, min_timesteps_per_batch),
+            end="\r",
+        )
+    return paths, timesteps_this_batch
+
+
+def sample_trajectories_climber(
+    env,
+    policy,
+    min_timesteps_per_batch,
+    max_path_length,
+    render=False,
+    render_mode=("rgb_array"),
+):
+    # TODO: get this from hw1
+    timesteps_this_batch = 0
+    paths = []
+    while timesteps_this_batch < min_timesteps_per_batch:
+        path = sample_trajectory_climber(env, policy, max_path_length, render, render_mode)
         paths.append(path)
         timesteps_this_batch += get_pathlength(path)
         print(

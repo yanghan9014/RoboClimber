@@ -139,20 +139,20 @@ class BaseBuffer(ABC):
             return th.tensor(array, device=self.device)
         return th.as_tensor(array, device=self.device)
 
-    @staticmethod
-    def _normalize_obs(
-        obs: Union[np.ndarray, Dict[str, np.ndarray]],
-        env = None,
-    ) -> Union[np.ndarray, Dict[str, np.ndarray]]:
-        if env is not None:
-            return env.normalize_obs(obs)
-        return obs
+    # @staticmethod
+    # def _normalize_obs(
+    #     obs: Union[np.ndarray, Dict[str, np.ndarray]],
+    #     env = None,
+    # ) -> Union[np.ndarray, Dict[str, np.ndarray]]:
+    #     if env is not None:
+    #         return env.normalize_obs(obs)
+    #     return obs
 
-    @staticmethod
-    def _normalize_reward(reward: np.ndarray, env = None) -> np.ndarray:
-        if env is not None:
-            return env.normalize_reward(reward).astype(np.float32)
-        return reward
+    # @staticmethod
+    # def _normalize_reward(reward: np.ndarray, env = None) -> np.ndarray:
+    #     if env is not None:
+    #         return env.normalize_reward(reward).astype(np.float32)
+    #     return reward
 
 
 class ReplayBuffer(BaseBuffer):
@@ -361,11 +361,15 @@ class RolloutBuffer(BaseBuffer):
         gae_lambda: float = 1,
         gamma: float = 0.99,
         n_envs: int = 1,
+        normalize_value = False,
     ):
         super().__init__(buffer_size, observation_space, action_space, device, n_envs)
         self.gae_lambda = gae_lambda
         self.gamma = gamma
         self.generator_ready = False
+        self.value_mean = 0
+        self.value_std = 1
+        self.normalize_value = normalize_value
         self.reset()
 
     def reset(self) -> None:
@@ -378,6 +382,8 @@ class RolloutBuffer(BaseBuffer):
         self.log_probs = np.zeros((self.buffer_size, self.n_envs), dtype=np.float32)
         self.advantages = np.zeros((self.buffer_size, self.n_envs), dtype=np.float32)
         self.generator_ready = False
+
+        self.statictis_gamma = 0.9
         super().reset()
 
     def compute_returns_and_advantage(self, last_values: th.Tensor, dones: np.ndarray) -> None:
@@ -400,7 +406,11 @@ class RolloutBuffer(BaseBuffer):
         :param dones: if the last step was a terminal step (one bool for each env).
         """
         # Convert to numpy
-        last_values = last_values.clone().cpu().numpy().flatten()  # type: ignore[assignment]
+        last_values = last_values.clone().cpu().numpy().flatten()
+        if self.normalize_value:
+            # unnormalize the values based on statistics
+            last_values = last_values * self.value_std + self.value_mean
+            self.values = self.values * self.value_std + self.value_mean
 
         last_gae_lam = 0
         for step in reversed(range(self.buffer_size)):
@@ -416,6 +426,17 @@ class RolloutBuffer(BaseBuffer):
         # TD(lambda) estimator, see Github PR #375 or "Telescoping in TD(lambda)"
         # in David Silver Lecture 4: https://www.youtube.com/watch?v=PnHCvfgC_ZA
         self.returns = self.advantages + self.values
+        # update the statistics of the value estimation
+        if self.normalize_value:
+            cur_return_mean = self.returns.mean()
+            cur_return_std = self.returns.std()
+            self.returns = (self.returns - self.value_mean) / (self.value_std + 1e-6)
+            self.value_mean = (1 - self.statictis_gamma) * cur_return_mean + self.statictis_gamma * self.value_mean
+            self.value_std = (1 - self.statictis_gamma) * cur_return_std + self.statictis_gamma * self.value_std
+        else:
+            # the statistics not used. For debug purpose only
+            self.value_mean = self.returns.mean()
+            self.value_std = self.returns.std()
 
     def add(
         self,

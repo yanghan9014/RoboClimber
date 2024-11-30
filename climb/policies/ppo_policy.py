@@ -8,10 +8,36 @@ import torch.optim as optim
 from climb.policies.base_policy import BasePolicy
 from climb.infrastructure import pytorch_util as ptu
 from torch import distributions
-from torch.distributions.transforms import TanhTransform
+from torch.distributions import TransformedDistribution
+from torch.distributions.transforms import TanhTransform, AffineTransform
 import pdb
 
 device = ptu.device
+
+# class TruncatedNormal(torch.distributions.Normal):
+#     def __init__(self, loc, scale, lower_bound=-0.4, upper_bound=0.4):
+#         super().__init__(loc, scale)
+#         self.lower_bound = lower_bound
+#         self.upper_bound = upper_bound
+#         self._z_lower = self.cdf(lower_bound)
+#         self._z_upper = self.cdf(upper_bound)
+#         self._z_log_delta = torch.log(self._z_upper - self._z_lower + 1e-6)  # Normalizing factor
+
+#     def log_prob(self, value):
+#         log_prob = super().log_prob(value)  # Standard normal log-prob
+#         # Apply truncation by subtracting normalization factor
+#         return (log_prob - self._z_log_delta).sum(-1)
+
+#     def sample(self, sample_shape=torch.Size()):
+#         # Rejection sampling to enforce truncation
+#         samples = super().sample(sample_shape)
+#         samples = torch.clamp(samples, self.lower_bound, self.upper_bound)
+#         return samples
+
+#     def entropy(self):
+#         # Approximate entropy for truncated normal
+#         base_entropy = super().entropy()
+#         return (base_entropy - self._z_log_delta).sum(-1)
 
 class PPOMLPPolicy(BasePolicy, nn.Module, metaclass=abc.ABCMeta):
     def __init__(self,
@@ -52,14 +78,16 @@ class PPOMLPPolicy(BasePolicy, nn.Module, metaclass=abc.ABCMeta):
             self.logits_na = None
             self.mean_net = ptu.build_mlp(input_size=self.ob_dim,
                                       output_size=self.ac_dim,
-                                      n_layers=self.n_layers, size=self.size)
-            self.std = nn.Parameter(
-                torch.ones(self.ac_dim, dtype=torch.float32, device=ptu.device)
+                                      n_layers=self.n_layers,
+                                      size=self.size,
+                                      output_activation="tanh")
+            self.logstd = nn.Parameter(
+                torch.full((self.ac_dim,), 0.0, dtype=torch.float32, device=ptu.device)
             )
             self.mean_net.to(ptu.device)
-            self.std.to(ptu.device)
+            self.logstd.to(ptu.device)
             self.optimizer = optim.Adam(
-                itertools.chain([self.std], self.mean_net.parameters()),
+                itertools.chain([self.logstd], self.mean_net.parameters()),
                 self.learning_rate
             )
 
@@ -76,9 +104,10 @@ class PPOMLPPolicy(BasePolicy, nn.Module, metaclass=abc.ABCMeta):
         observation = ptu.from_numpy(observation)
         action_distribution, _ = self.forward(observation)
         action = action_distribution.sample()
-        epsilon = 1e-6
-        clipped_actions = torch.clamp(action, -(self.action_space_bound - epsilon), self.action_space_bound - epsilon)
-        return ptu.to_numpy(action.squeeze()), action_distribution.log_prob(clipped_actions)
+        # epsilon = 1e-6
+        # clipped_actions = torch.clamp(action, -(self.action_space_bound - epsilon), self.action_space_bound - epsilon)
+        # log_prob(acttion).sum(-1) is required when using distributions.Normal
+        return ptu.to_numpy(action.squeeze()), action_distribution.log_prob(action).sum(-1) 
 
     def forward(self, observation: torch.FloatTensor):
         if self.discrete:
@@ -87,21 +116,14 @@ class PPOMLPPolicy(BasePolicy, nn.Module, metaclass=abc.ABCMeta):
             return action_distribution
         else:
             batch_mean = self.mean_net(observation)
-            scale_tril = torch.diag(self.std)
-            batch_dim = batch_mean.shape[0]
-            batch_scale_tril = scale_tril.repeat(batch_dim, 1, 1)
-            base_distribution = distributions.MultivariateNormal(
-                batch_mean,
-                scale_tril=batch_scale_tril,
-            )
-            entropy = base_distribution.entropy()
+            action_distribution = distributions.Normal(loc=batch_mean, scale=torch.exp(self.logstd))
+            # action_distribution = TruncatedNormal(loc=batch_mean, scale=torch.exp(self.logstd), lower_bound=-self.action_space_bound, upper_bound=self.action_space_bound)
+            entropy = action_distribution.entropy()
 
-            # Apply tanh transformation to enforce [-1, 1] range
-            tanh_transform = TanhTransform()
-            transformed_distribution = distributions.TransformedDistribution(base_distribution, [tanh_transform])
-            action_distribution = distributions.TransformedDistribution(transformed_distribution, [
-                torch.distributions.transforms.AffineTransform(loc=0.0, scale=self.action_space_bound)
-            ])
+            # Define the transformation to map to action bounds [-action_bound, action_bound]
+            transforms = [TanhTransform(cache_size=1), AffineTransform(loc=0.0, scale=self.action_space_bound)]
+            action_distribution = TransformedDistribution(action_distribution, transforms)
+
             return action_distribution, entropy
     
     def update(self):
