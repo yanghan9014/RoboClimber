@@ -64,7 +64,7 @@ class PPOAgent(BaseAgent):
         self.rollout_buffer = buffers.RolloutBuffer(buffer_size=ep_len, observation_space=env.observation_space, action_space=env.action_space, device=ptu.device, gamma=self.gamma, n_envs=1)
 
     def train(self):
-        
+        critic_updates_per_actor_update = 5
         self.train_mode()
         clip_range = self.clip_range(self._current_progress_remaining)
         if self.clip_range_vf is not None:
@@ -77,52 +77,68 @@ class PPOAgent(BaseAgent):
                 if self.actor.discrete:
                     actions = rollout_data.actions.long().flatten()
                 
+                ### modified
+                for _ in range(critic_updates_per_actor_update):
+                    values = self.critic(observations).squeeze(1)
+                    # some ppl do value clipping 
+                    if self.clip_range_vf is None:
+                        # No clipping
+                        values_pred = values
+                    else:
+                        # Clip the difference between old and new value
+                        # NOTE: this depends on the reward scaling
+                        values_pred = rollout_data.old_values + torch.clamp(
+                            values - rollout_data.old_values, -clip_range_vf, clip_range_vf
+                        )
+                    value_loss = self.MseLoss(rollout_data.returns, values_pred.squeeze())
+                    self.critic.optimizer.zero_grad()
+                    value_loss.backward()
+                    torch.nn.utils.clip_grad_norm_(self.critic.parameters(), self.max_grad_norm)
+                    self.critic.optimizer.step()
+
+
                 distribution, entropy = self.actor(observations)
-                values = self.critic(observations).squeeze(1)
+                entropy = None
+                # values = self.critic(observations).squeeze(1)
                 epsilon = 1e-6
                 # clipped_actions = torch.clamp(actions, -(self.action_space_bound - epsilon), self.action_space_bound - epsilon)
                 normalized_actions = actions / self.action_space_bound
                 clipped_actions = torch.clamp(normalized_actions, -(1 - epsilon), 1 - epsilon)
                 # log_prob = distribution.log_prob(clipped_actions)
                 log_prob = distribution.log_prob(clipped_actions)
-                print(log_prob)
+                # print(log_prob)
                 advantages = rollout_data.advantages
                 if self.standardize_advantages:
                     advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
                 
                 ratio = torch.exp(log_prob - rollout_data.old_log_prob)
-                print(f"ratio: {ratio}")
+                # print(f"ratio: {ratio}")
                 policy_loss_1 = advantages * ratio
                 policy_loss_2 = advantages * torch.clamp(ratio, 1 - clip_range, 1 + clip_range)
                 policy_loss = -torch.min(policy_loss_1, policy_loss_2).mean()
 
-                # some ppl do value clipping 
-                if self.clip_range_vf is None:
-                    # No clipping
-                    values_pred = values
-                else:
-                    # Clip the difference between old and new value
-                    # NOTE: this depends on the reward scaling
-                    values_pred = rollout_data.old_values + torch.clamp(
-                        values - rollout_data.old_values, -clip_range_vf, clip_range_vf
-                    )
-
-                value_loss = self.MseLoss(rollout_data.returns, values_pred.squeeze())
-                # if entropy is None:
-                #     # Approximate entropy when no analytical form
-                #     entropy_loss = -torch.mean(-log_prob)
-                # else:
-                #     entropy_loss = -torch.mean(entropy)
                 
-                loss = policy_loss + self.vf_coef * value_loss
+
+                # value_loss = self.MseLoss(rollout_data.returns, values_pred.squeeze())
+                if entropy is None:
+                    # Approximate entropy when no analytical form
+                    entropy_loss = -torch.mean(-log_prob)
+                else:
+                    entropy_loss = -torch.mean(entropy)
+                
+                loss = policy_loss + 0.01 * entropy_loss #+ self.vf_coef * value_loss
                 # loss = policy_loss + self.ent_coef * entropy_loss + self.vf_coef * value_loss
                 # print(f"loss: {loss.item():.5f}, policy: {policy_loss.item():.5f}, entropy: {entropy_loss.item():.2f}, value_loss: {value_loss.item():.2f}")
-                self.zero_all_grad()
-                loss.backward()
-                self.clip_gradient(self.max_grad_norm)
-                self.step_all()
+                # self.zero_all_grad()
+                # loss.backward()
+                # self.clip_gradient(self.max_grad_norm)
+                # self.step_all()
+                self.actor.optimizer.zero_grad()
+                policy_loss.backward()
+                torch.nn.utils.clip_grad_norm_(self.actor.parameters(), self.max_grad_norm)
+                self.actor.optimizer.step()
         # print(f"action max: {actions.max():.5f}, min: {actions.min():.5f}")
-        print(f"loss: {loss.item():.2f}, policy: {policy_loss.item():.2f}, value_loss: {value_loss.item():.2f}")
+        print(f"loss: {loss.item():.2f}, policy: {policy_loss.item():.2f}, entropy: {entropy_loss.item():.2f}, value_loss: {value_loss.item():.2f}")
         # print(f"loss: {loss.item():.2f}")
 
         # return loss

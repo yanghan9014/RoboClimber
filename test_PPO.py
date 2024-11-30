@@ -125,6 +125,12 @@ def main():
         os.makedirs(logdir)
 
     print("\n\n\nLOGGING TO: ", logdir, "\n\n\n")
+    # copy files
+    backup_dir = os.path.join(logdir, 'code')
+    os.makedirs(backup_dir, exist_ok=True)
+    os.system('cp test_PPO.py %s/' % backup_dir)
+    os.system('cp -r ./assets %s/' % backup_dir)
+    os.system('cp -r ./climb %s/' % backup_dir)
 
     ###################
     ### RUN TRAINING

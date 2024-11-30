@@ -48,7 +48,7 @@ class Climber(HumanoidEnv):
         x_velocity, y_velocity, z_velocity = xyz_velocity
 
         observation = self._get_obs()
-        reward, reward_info = self._get_rew(z_velocity, action)
+        reward, reward_info = self._get_rew(z_velocity, action, z_position=self.data.qpos[2])
         terminated = (not self.is_healthy) and self._terminate_when_unhealthy
         info = {
             "x_position": self.data.qpos[0],
@@ -68,8 +68,18 @@ class Climber(HumanoidEnv):
         # truncation=False as the time limit is handled by the `TimeLimit` wrapper added during `make`
         return observation, reward, terminated, False, info
 
-    def _get_rew(self, z_velocity: float, action):
-        upward_reward = max(0.0, self._upward_reward_weight * z_velocity)
+    def _get_rew(self, z_velocity: float, action, z_position: float):
+        # if z_position >1.5 and z_velocity<0:
+        #     upward_reward = self._upward_reward_weight * z_velocity * 0.1
+        # elif z_position > 1.5:
+        #     upward_reward = self._upward_reward_weight * z_velocity
+        # else:
+        #     upward_reward = max(0.0, self._upward_reward_weight * z_velocity)
+        if z_velocity > 0:
+            upward_reward = self._upward_reward_weight * z_velocity
+        else:
+            upward_reward = self._upward_reward_weight * z_velocity * 0.1
+        # upward_reward = max(0.0, self._upward_reward_weight * z_velocity)
         healthy_reward = self.healthy_reward
         rewards = upward_reward + healthy_reward
 

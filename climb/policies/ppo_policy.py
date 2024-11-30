@@ -83,7 +83,7 @@ class PPOMLPPolicy(BasePolicy, nn.Module, metaclass=abc.ABCMeta):
         epsilon = 1e-6
         # clipped_actions = torch.clamp(action, -(self.action_space_bound - epsilon), self.action_space_bound - epsilon)
         clipped_actions = torch.clamp(action_scaled, -(self.action_space_bound - epsilon), self.action_space_bound - epsilon)
-        clipped_actions = clipped_actions/ self.action_space_bound
+        clipped_actions = clipped_actions / self.action_space_bound
         # return ptu.to_numpy(action.squeeze()), action_distribution.log_prob(clipped_actions)
         # return ptu.to_numpy(clipped_actions.squeeze()), action_distribution.log_prob(clipped_actions)
         return ptu.to_numpy(action_scaled.squeeze()), action_distribution.log_prob(clipped_actions)
