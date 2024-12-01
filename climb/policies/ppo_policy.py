@@ -112,7 +112,7 @@ class PPOMLPPolicy(BasePolicy, nn.Module, metaclass=abc.ABCMeta):
             entropy = base_distribution.entropy()
 
             # Apply tanh transformation to enforce [-1, 1] range
-            tanh_transform = TanhTransform()
+            tanh_transform = TanhTransform(cache_size=1)
             transformed_distribution = distributions.TransformedDistribution(base_distribution, [tanh_transform])
             action_distribution = distributions.TransformedDistribution(transformed_distribution, [
                 torch.distributions.transforms.AffineTransform(loc=0.0, scale=self.action_space_bound)

@@ -186,8 +186,8 @@ class RL_Trainer(object):
             self._last_obs = new_obs
             self._last_episode_starts = dones
 
-            with torch.no_grad():
-                values = self.agent.critic(ptu.from_numpy(new_obs))
+        with torch.no_grad():
+            values = self.agent.critic(ptu.from_numpy(new_obs))
         rollout_buffer.compute_returns_and_advantage(last_values=values, dones=dones)
         return paths
 
