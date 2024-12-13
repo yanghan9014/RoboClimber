@@ -53,16 +53,10 @@ class RL_Trainer(object):
         :param collect_policy:
         :param eval_policy:
         """
-        self.total_envsteps = 0
         self.start_time = time.time()
-
-        print_period = 1000
-        for itr in range(n_iter + 1):
-            if itr % print_period == 0:
-                print("\n\n********** Iteration %i ************" % itr)
-
-            # decide if metrics should be logged
-            if self.params["scalar_log_freq"] == -1:
+        paths = []
+        while self.num_timesteps <= self.params['max_training_timesteps']:
+            if self.params['scalar_log_freq'] == -1:
                 self.logmetrics = False
             elif itr % self.params["scalar_log_freq"] == 0:
                 self.logmetrics = True
