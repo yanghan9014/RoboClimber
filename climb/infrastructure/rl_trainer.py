@@ -15,8 +15,9 @@ from climb.infrastructure import pytorch_util as ptu
 from climb.infrastructure.utils import sample_trajectory, sample_trajectories, sample_n_trajectories, sample_trajectories_climber, sample_trajectory_climber
 from climb.infrastructure.logger import Logger
 from climb.envs.envs_utils import register_custom_envs
-from climb.agents.ppo import PPOAgent
-from climb.infrastructure.utils import Path, Path_height
+from climb.agents.ppo_agent import PPOAgent
+from climb.agents.exploration_agent import ExplorationOrExploitationAgent
+from climb.infrastructure.utils import Path, Path_climb
 import pdb
 
 class RL_Trainer(object):
@@ -40,11 +41,14 @@ class RL_Trainer(object):
 
         if self.params['xml_file'] is not None:
             xml_file = os.path.abspath(self.params['xml_file'])
-            self.env = gym.make(self.params['env_name'], xml_file=xml_file, keyframe=self.params['keyframe'] , render_mode="rgb_array")
+            self.env = gym.make(self.params['env_name'], xml_file=xml_file, keyframe=self.params['keyframe'], rand_start_keyframe=self.params['rand_start_keyframe'], render_mode="rgb_array")
         else:
             self.env = gym.make(self.params['env_name'], render_mode="rgb_array")
-        if self.params['keyframe'] is not None:
-            self.env = RecordVideo(self.env, "videos/", episode_trigger=lambda episode_id: self.saving_video, name_prefix=self.params['env_name']+'_'+self.params['keyframe'])
+        
+        if self.params['rand_start_keyframe']:
+            self.env = RecordVideo(self.env, "videos/todo", episode_trigger=lambda episode_id: self.saving_video, name_prefix=self.params['env_name']+'_rand_start')
+        elif self.params['keyframe'] is not None:
+            self.env = RecordVideo(self.env, "videos/keyframe", episode_trigger=lambda episode_id: self.saving_video, name_prefix=self.params['env_name']+'_'+self.params['keyframe'])
         else:
             self.env = RecordVideo(self.env, "videos/", episode_trigger=lambda episode_id: self.saving_video, name_prefix=self.params['env_name'])
             # self.env = RecordVideo(self.env, "videos/", episode_trigger=lambda episode_id: episode_id % 1000 == 1, name_prefix=self.params['env_name'])
@@ -70,8 +74,11 @@ class RL_Trainer(object):
         #############
         ## AGENT
         #############
-        agent_class = self.params['agent_class']
-        self.agent: Union[PPOAgent] = agent_class(self.env, self.params['agent_params'], ep_len=self.params['ep_len'])
+        # agent_class = self.params['agent_class']
+        if self.params['rnd']:
+            self.agent: Union[PPOAgent] = ExplorationOrExploitationAgent(self.env, self.params['agent_params'], ep_len=self.params['ep_len'])
+        else:
+            self.agent: Union[PPOAgent] = PPOAgent(self.env, self.params['agent_params'], ep_len=self.params['ep_len'])
 
         if self.params['load_params'] is not None:
             checkpoint = torch.load(self.params['load_params'])
@@ -126,8 +133,12 @@ class RL_Trainer(object):
         self.agent.eval_mode()
         n_steps = 0
         rollout_buffer.reset()
+
+        # upward_reward = []
+        # reward_motion = []
+
         if self.params['env_name'] == 'Climber-v0':
-            obs, height, acs, rews, next_obs, terminals = [], [], [], [], [], []
+            obs, acs, rews, next_obs, terminals, heights, goal_rewards = [], [], [], [], [], [], []
         else:
             obs, acs, rews, next_obs, terminals = [], [], [], [], []
         self.env.reset(seed=self.params['seed'])
@@ -143,7 +154,11 @@ class RL_Trainer(object):
             # clipped_actions = np.clip(actions, self.env.action_space.low, self.env.action_space.high)
             new_obs, rewards, dones, truncated, infos = env.step(actions)
             if self.params['env_name'] == 'Climber-v0':
-                z_pos = infos['z_position']
+                height = infos['z_position']
+                # reward_motion.append(infos['reward_motion'])
+                goal_reward = infos['goal_reward']
+
+            # upward_reward.append(infos['reward_upward'])
 
             self.num_timesteps += 1
 
@@ -165,6 +180,7 @@ class RL_Trainer(object):
                 self._last_obs,
                 actions,
                 rewards,
+                dones,
                 self._last_episode_starts,
                 values.cpu(),
                 log_probs.cpu(),
@@ -173,14 +189,18 @@ class RL_Trainer(object):
             obs.append(self._last_obs)
             acs.append(actions)
             if self.params['env_name'] == 'Climber-v0':
-                height.append(z_pos)
+                heights.append(height)
+                goal_rewards.append(goal_reward)
             rews.append(rewards)
             next_obs.append(new_obs)
             if dones or n_steps >= n_rollout_steps:
                 terminals.append(1)
+                # upward_reward = []
+                goal_reward = []
+                
                 if self.params['env_name'] == 'Climber-v0':
-                    paths.append(Path_height(obs, height, acs, rews, next_obs, terminals))
-                    obs, height, acs, rews, next_obs, terminals = [], [], [], [], [], []
+                    paths.append(Path_climb(obs, acs, rews, next_obs, terminals, heights, goal_rewards))
+                    obs, acs, rews, next_obs, terminals, heights, goal_rewards = [], [], [], [], [], [], []
                 else:
                     paths.append(Path(obs, acs, rews, next_obs, terminals))
                     obs, acs, rews, next_obs, terminals = [], [], [], [], []
@@ -195,7 +215,12 @@ class RL_Trainer(object):
         with torch.no_grad():
             # Compute value for the last timestep
             values = self.agent.critic(ptu.from_numpy(new_obs))
-        rollout_buffer.compute_returns_and_advantage(last_values=values, dones=dones)
+        if not self.params['rnd']:
+            rollout_buffer.compute_returns_and_advantage(last_values=values, dones=dones)
+        # print(f"motion rew mean: {np.array(reward_motion).mean():.3f}")
+        # print(f"motion rew std: {np.array(reward_motion).std():.3f}")
+        # print(f"motion rew max: {np.array(reward_motion).max():.3f}")
+        # print(f"motion rew min: {np.array(reward_motion).min():.3f}")
         return paths
 
 
@@ -228,6 +253,7 @@ class RL_Trainer(object):
     ####################################
     def perform_logging(self, itr, paths, eval_policy, all_logs):
         self.agent.eval_mode()
+        self.env.unwrapped.cur_mode = "eval"
         # record one episode
         self.saving_video = True
         if self.params['env_name'] == 'Climber-v0':
@@ -243,6 +269,8 @@ class RL_Trainer(object):
             eval_paths, eval_envsteps_this_batch = sample_trajectories_climber(self.env, eval_policy, self.params['eval_batch_size'], self.params['ep_len'])
         else:
             eval_paths, eval_envsteps_this_batch = sample_trajectories(self.env, eval_policy, self.params['eval_batch_size'], self.params['ep_len'])
+        
+        self.env.unwrapped.cur_mode = "train"
         # save eval metrics
         if self.logmetrics:
             # returns, for logging
@@ -252,6 +280,8 @@ class RL_Trainer(object):
             if self.params['env_name'] == 'Climber-v0':
                 train_max_height = [path["height"].max() for path in paths]
                 eval_max_height = [eval_path["height"].max() for eval_path in eval_paths]
+                train_goal_reward = [path["goal_reward"].mean() for path in paths]
+                eval_goal_reward = [eval_path["goal_reward"].mean() for eval_path in eval_paths]
 
             # episode lengths, for logging
             train_ep_lens = [len(path["reward"]) for path in paths]
@@ -266,6 +296,12 @@ class RL_Trainer(object):
             logs["Eval_AverageEpLen"] = np.mean(eval_ep_lens)
             if self.params['env_name'] == 'Climber-v0':
                 logs["Eval_AverageMaxHeight"] = np.mean(eval_max_height)
+                logs["Eval_AverageGoalReward"] = np.mean(eval_goal_reward)
+                if self.params['rand_start_keyframe'] and np.mean(eval_max_height) > self.env.unwrapped.height_trigger[self.env.unwrapped.start_keyframe_max]:
+                    self.env.unwrapped.start_keyframe_max += 1
+                    print("==============================================")
+                    print("TRIGGER HEIGHT REACHED! Adding another starting keyframe")
+                    print("==============================================")
 
             logs["Train_AverageReturn"] = np.mean(train_returns)
             logs["Train_StdReturn"] = np.std(train_returns)
@@ -274,6 +310,7 @@ class RL_Trainer(object):
             logs["Train_AverageEpLen"] = np.mean(train_ep_lens)
             if self.params['env_name'] == 'Climber-v0':
                 logs["Train_AverageMaxHeight"] = np.mean(train_max_height)
+                logs["Train_AverageGoalReward"] = np.mean(train_goal_reward)
 
             # logs["Train_EnvstepsSoFar"] = self.total_envsteps
             logs["TimeSinceStart"] = time.time() - self.start_time

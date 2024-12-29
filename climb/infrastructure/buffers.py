@@ -15,7 +15,9 @@ class RolloutBufferSamples(NamedTuple):
     old_values: th.Tensor
     old_log_prob: th.Tensor
     advantages: th.Tensor
+    rewards: th.Tensor
     returns: th.Tensor
+    dones: th.Tensor
 
 class ReplayBufferSamples(NamedTuple):
     observations: th.Tensor
@@ -348,6 +350,7 @@ class RolloutBuffer(BaseBuffer):
     rewards: np.ndarray
     advantages: np.ndarray
     returns: np.ndarray
+    dones: np.ndarray
     episode_starts: np.ndarray
     log_probs: np.ndarray
     values: np.ndarray
@@ -377,6 +380,7 @@ class RolloutBuffer(BaseBuffer):
         self.actions = np.zeros((self.buffer_size, self.n_envs, self.action_dim), dtype=np.float32)
         self.rewards = np.zeros((self.buffer_size, self.n_envs), dtype=np.float32)
         self.returns = np.zeros((self.buffer_size, self.n_envs), dtype=np.float32)
+        self.dones = np.zeros((self.buffer_size, self.n_envs), dtype=np.float32)
         self.episode_starts = np.zeros((self.buffer_size, self.n_envs), dtype=np.float32)
         self.values = np.zeros((self.buffer_size, self.n_envs), dtype=np.float32)
         self.log_probs = np.zeros((self.buffer_size, self.n_envs), dtype=np.float32)
@@ -444,6 +448,7 @@ class RolloutBuffer(BaseBuffer):
         action: np.ndarray,
         reward: np.ndarray,
         episode_start: np.ndarray,
+        done: np.ndarray,
         value: th.Tensor,
         log_prob: th.Tensor,
     ) -> None:
@@ -472,6 +477,7 @@ class RolloutBuffer(BaseBuffer):
         self.observations[self.pos] = np.array(obs)
         self.actions[self.pos] = np.array(action)
         self.rewards[self.pos] = np.array(reward)
+        self.dones[self.pos] = np.array(done)
         self.episode_starts[self.pos] = np.array(episode_start)
         self.values[self.pos] = value.clone().cpu().numpy().flatten()
         self.log_probs[self.pos] = log_prob.clone().cpu().numpy()
@@ -481,7 +487,7 @@ class RolloutBuffer(BaseBuffer):
 
     def get(self, batch_size: Optional[int] = None) -> Generator[RolloutBufferSamples, None, None]:
         assert self.full, ""
-        indices = np.random.permutation(self.buffer_size * self.n_envs)
+        self.indices = np.random.permutation(self.buffer_size * self.n_envs)
         # Prepare the data
         if not self.generator_ready:
             _tensor_names = [
@@ -491,6 +497,7 @@ class RolloutBuffer(BaseBuffer):
                 "log_probs",
                 "advantages",
                 "returns",
+                "dones",
             ]
 
             for tensor in _tensor_names:
@@ -503,7 +510,7 @@ class RolloutBuffer(BaseBuffer):
 
         start_idx = 0
         while start_idx < self.buffer_size * self.n_envs:
-            yield self._get_samples(indices[start_idx : start_idx + batch_size])
+            yield self._get_samples(self.indices[start_idx : start_idx + batch_size])
             start_idx += batch_size
 
     def _get_samples(
@@ -516,7 +523,9 @@ class RolloutBuffer(BaseBuffer):
             self.values[batch_inds].flatten(),
             self.log_probs[batch_inds].flatten(),
             self.advantages[batch_inds].flatten(),
+            self.rewards[batch_inds].flatten(),
             self.returns[batch_inds].flatten(),
+            self.dones[batch_inds].flatten(),
         )
         return RolloutBufferSamples(*tuple(map(self.to_torch, data)))
 

@@ -82,7 +82,7 @@ class PPOMLPPolicy(BasePolicy, nn.Module, metaclass=abc.ABCMeta):
                                       size=self.size,
                                       output_activation="tanh")
             self.logstd = nn.Parameter(
-                torch.full((self.ac_dim,), 0.0, dtype=torch.float32, device=ptu.device)
+                torch.full((self.ac_dim,), -0.36, dtype=torch.float32, device=ptu.device)
             )
             self.mean_net.to(ptu.device)
             self.logstd.to(ptu.device)
@@ -118,13 +118,13 @@ class PPOMLPPolicy(BasePolicy, nn.Module, metaclass=abc.ABCMeta):
             batch_mean = self.mean_net(observation)
             action_distribution = distributions.Normal(loc=batch_mean, scale=torch.exp(self.logstd))
             # action_distribution = TruncatedNormal(loc=batch_mean, scale=torch.exp(self.logstd), lower_bound=-self.action_space_bound, upper_bound=self.action_space_bound)
-            entropy = action_distribution.entropy()
+            # entropy = action_distribution.entropy()
 
             # Define the transformation to map to action bounds [-action_bound, action_bound]
             transforms = [TanhTransform(cache_size=1), AffineTransform(loc=0.0, scale=self.action_space_bound)]
             action_distribution = TransformedDistribution(action_distribution, transforms)
 
-            return action_distribution, entropy
+            return action_distribution, None
     
     def update(self):
 

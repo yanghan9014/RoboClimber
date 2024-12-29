@@ -28,7 +28,7 @@
     </asset>
     <worldbody>
         <light cutoff="100" diffuse="1 1 1" dir="-0 0 -1.3" directional="true" exponent="1" pos="0 0 1.3" specular=".1 .1 .1"/>
-        <geom condim="3" friction="1 .1 .1" material="MatPlane" name="floor" pos="0 0 0" group="1" rgba="0.8 0.9 0.8 0.1" size="20 20 0.125" type="plane"/> <!-- 0 -->
+        <geom condim="3" friction="1 .1 .1" material="MatPlane" name="floor" pos="0 0 0" group="1" rgba="0.8 0.9 0.8 1" size="20 20 0.125" type="plane"/> <!-- 0 -->
         <!-- <body name="topout" pos="1.6 0 1.8">
             <geom name="topout_box" size="0.8 2 0.05" type="box"/>
         </body> -->
@@ -99,6 +99,7 @@
             </body>
             <body name="right_upper_arm" pos="0 -0.17 0.06">
                 <joint armature="0.0068" axis="0 1 0" damping="2" name="right_shoulder1" pos="0 0 0" range="-95 50" stiffness="2" type="hinge"/>
+                <joint armature="0.0068" axis="-1 0 1" damping="2" name="right_shoulder2" pos="0 0 0" range="-30 30" stiffness="2" type="hinge"/>
                 <!-- <joint armature="0.0051" axis="0 -1 1" name="right_shoulder2" pos="0 0 0" range="-85 60" stiffness="1" type="hinge"/>
                 <joint armature="0.0051" axis="1 -1 -1" name="right_shoulder3" pos="0 0 0" range="-85 85" stiffness="1" type="hinge"/> -->
                 <geom fromto="0 0 0 .196 0 -.196" name="right_uarm1" size="0.04 0.16" type="capsule"/> <!-- 27 -->
@@ -136,6 +137,7 @@
             </body>
             <body name="left_upper_arm" pos="0 0.17 0.06">
                 <joint armature="0.0068" axis="0 1 0" damping="2" name="left_shoulder1" pos="0 0 0" range="-95 50" stiffness="2" type="hinge"/>
+                <joint armature="0.0068" axis="-1 0 1" damping="2" name="left_shoulder2" pos="0 0 0" range="-30 30" stiffness="2" type="hinge"/>
                 <!-- <joint armature="0.0051" axis="0 1 1" name="left_shoulder2" pos="0 0 0" range="-60 85" stiffness="1" type="hinge"/>
                 <joint armature="0.0051" axis="-1 -1 1" name="left_shoulder3" pos="0 0 0" range="-60 85" stiffness="1" type="hinge"/> -->
                 <geom fromto="0 0 0 .196 0 -.196" name="left_uarm1" size="0.04 0.16" type="capsule"/> <!-- 39 -->
@@ -197,10 +199,10 @@
 
     <actuator>
         <motor gear="100" joint="right_shoulder1" name="right_shoulder1"/>
-        <!-- <motor gear="100" joint="right_shoulder2" name="right_shoulder2"/> -->
+        <motor gear="100" joint="right_shoulder2" name="right_shoulder2"/>
         <!-- <motor gear="100" joint="right_shoulder3" name="right_shoulder3"/> -->
         <motor gear="100" joint="left_shoulder1" name="left_shoulder1"/>
-        <!-- <motor gear="100" joint="left_shoulder2" name="left_shoulder2"/> -->
+        <motor gear="100" joint="left_shoulder2" name="left_shoulder2"/>
         <!-- <motor gear="100" joint="left_shoulder3" name="left_shoulder3"/> -->
         <motor gear="130" joint="right_elbow" name="right_elbow"/>
         <motor gear="130" joint="left_elbow" name="left_elbow"/>
@@ -289,19 +291,21 @@
    0       
    0       
    0       
-   0.098   
+   0.098
+   0   
    0.24    
   -0.34    
    0.4     
    0.73    
    0.75    
-  -0.41    
+  -0.41  
+   0  
    0.5     
   -0.43    
    0.55    
    0.77    
    0.85 "/>
-    <key name="keyframe3" 
+   <!-- <key name="keyframe3" 
    qpos="
    0.2     
    0       
@@ -516,6 +520,6 @@
   -0.7     
    0.46    
    1.1     
-   0.91"/>
+   0.91"/>-->
     </keyframe> 
-</mujoco>
+</mujoco> 

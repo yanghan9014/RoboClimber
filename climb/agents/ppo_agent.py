@@ -18,8 +18,6 @@ class PPOAgent(BaseAgent):
 
     def __init__(self, env, agent_params, ep_len):
         super().__init__()
-
-
         self.agent_params = agent_params
         self.action_space_bound = torch.tensor(env.action_space.high)
         self.policy_updates_per_rollout = self.agent_params['policy_updates_per_rollout']
@@ -71,7 +69,6 @@ class PPOAgent(BaseAgent):
                                                     normalize_value=self.agent_params['normalize_value_est'])
 
     def train(self):
-        
         self.train_mode()
         clip_range = self.clip_range(self._current_progress_remaining)
         if self.clip_range_vf is not None:
@@ -101,11 +98,11 @@ class PPOAgent(BaseAgent):
                 # print(f"ratio max {ratio.max():.2f}")
                 # print(f"ratio min {ratio.min()}")
 
-                # if entropy is None:
-                #     # Approximate entropy when no analytical form
-                #     entropy_loss = -torch.mean(-log_prob)
-                # else:
-                #     entropy_loss = -torch.mean(entropy)
+                if entropy is None:
+                    # Approximate entropy when no analytical form
+                    entropy_loss = -torch.mean(-log_prob)
+                else:
+                    entropy_loss = -torch.mean(entropy)
                 
                 for _ in range(self.agent_params['critic_updates_per_policy_update']):
                     values = self.critic(observations).squeeze(1)
@@ -118,6 +115,14 @@ class PPOAgent(BaseAgent):
                             values - rollout_data.old_values, -clip_range_vf, clip_range_vf
                         )
                     value_loss = self.MseLoss(values_pred.squeeze(), rollout_data.returns)
+                    # print(f"values mean {values.mean():.2f}")
+                    # print(f"target mean {rollout_data.returns.mean():.2f}\n")
+                    # print(f"values std {values.std():.2f}")
+                    # print(f"target std {rollout_data.returns.std():.2f}\n")
+                    # print(f"values max {values.argmax()} {values.max():.2f} (actual: {rollout_data.returns[values.argmax()]:.2f})")
+                    # print(f"target max {rollout_data.returns.argmax()} {rollout_data.returns.max():.2f}\n")
+                    # print(f"values min {values.argmin()} {values.min():.2f} (actual: {rollout_data.returns[values.argmin()]:.2f})")
+                    # print(f"target min {rollout_data.returns.argmin()} {rollout_data.returns.min():.2f}\n")
                     critic_loss = self.vf_coef * value_loss
                     self.critic.optimizer.zero_grad()
                     critic_loss.backward()
@@ -126,8 +131,9 @@ class PPOAgent(BaseAgent):
                     self.critic.optimizer.step()
                 
                 # loss = policy_loss + self.ent_coef * entropy_loss + self.vf_coef * value_loss
+                actor_loss = policy_loss + self.ent_coef * entropy_loss
                 self.actor.optimizer.zero_grad()
-                policy_loss.backward()
+                actor_loss.backward()
                 if self.max_grad_norm is not None:
                     grad_norm_actor = torch.nn.utils.clip_grad_norm_(self.actor.parameters(), self.max_grad_norm)
                 self.actor.optimizer.step()

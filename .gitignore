@@ -52,3 +52,5 @@ mjkey.txt  # MuJoCo license key (do not share publicly)
 
 # Videos
 videos/
+
+data/

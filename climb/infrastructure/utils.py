@@ -37,6 +37,65 @@ def get_schedule_fn(value_schedule: Union[Schedule, float]) -> Schedule:
     # Some types are have odd behaviors when part of a Schedule, like numpy floats
     return lambda progress_remaining: float(value_schedule(progress_remaining))
 
+
+def linear_interpolation(l, r, alpha):
+    return l + alpha * (r - l)
+
+class Schedule(object):
+    def value(self, t):
+        """Value of the schedule at time t"""
+        raise NotImplementedError()
+    
+class ConstantSchedule(object):
+    def __init__(self, value):
+        """Value remains constant over time.
+        Parameters
+        ----------
+        value: float
+            Constant value of the schedule
+        """
+        self._v = value
+
+    def value(self, t):
+        """See Schedule.value"""
+        return self._v
+    
+class PiecewiseSchedule(object):
+    def __init__(self, endpoints, interpolation=linear_interpolation, outside_value=None):
+        """Piecewise schedule.
+        endpoints: [(int, int)]
+            list of pairs `(time, value)` meanining that schedule should output
+            `value` when `t==time`. All the values for time must be sorted in
+            an increasing order. When t is between two times, e.g. `(time_a, value_a)`
+            and `(time_b, value_b)`, such that `time_a <= t < time_b` then value outputs
+            `interpolation(value_a, value_b, alpha)` where alpha is a fraction of
+            time passed between `time_a` and `time_b` for time `t`.
+        interpolation: lambda float, float, float: float
+            a function that takes value to the left and to the right of t according
+            to the `endpoints`. Alpha is the fraction of distance from left endpoint to
+            right endpoint that t has covered. See linear_interpolation for example.
+        outside_value: float
+            if the value is requested outside of all the intervals sepecified in
+            `endpoints` this value is returned. If None then AssertionError is
+            raised when outside value is requested.
+        """
+        idxes = [e[0] for e in endpoints]
+        assert idxes == sorted(idxes)
+        self._interpolation = interpolation
+        self._outside_value = outside_value
+        self._endpoints      = endpoints
+
+    def value(self, t):
+        """See Schedule.value"""
+        for (l_t, l), (r_t, r) in zip(self._endpoints[:-1], self._endpoints[1:]):
+            if l_t <= t and t < r_t:
+                alpha = float(t - l_t) / (r_t - l_t)
+                return self._interpolation(l, r, alpha)
+
+        # t does not belong to any of the pieces, so doom.
+        assert self._outside_value is not None
+        return self._outside_value
+
 def get_obs_shape(
     observation_space: spaces.Space,
 ) -> Union[Tuple[int, ...], Dict[str, Tuple[int, ...]]]:
@@ -115,7 +174,7 @@ def sample_trajectory_climber(env, policy, max_path_length, render=False, render
     obs = env.reset()
     if isinstance(obs, tuple):
         obs = obs[0]
-    obses, acts, rews, nobses, terms, heights = [], [], [], [], [], []
+    obses, acts, rews, nobses, terms, heights, goal_reward = [], [], [], [], [], [], []
     steps = 0
     while True:
         obses.append(obs)
@@ -124,6 +183,7 @@ def sample_trajectory_climber(env, policy, max_path_length, render=False, render
         acts.append(act)
         nobs, rew, done, _, info = env.step(act)
         heights.append(info['z_position'])
+        goal_reward.append(info['goal_reward'])
         nobses.append(nobs)
         rews.append(rew)
         obs = nobs.copy()
@@ -133,7 +193,7 @@ def sample_trajectory_climber(env, policy, max_path_length, render=False, render
             break
         else:
             terms.append(0)
-    return Path_height(obses, heights, acts, rews, nobses, terms)
+    return Path_climb(obses, acts, rews, nobses, terms, heights, goal_reward)
 
 
 def sample_trajectories(
@@ -204,7 +264,7 @@ def Path(obs, acs, rewards, next_obs, terminals):
         "terminal": np.array(terminals, dtype=np.float32),
     }
 
-def Path_height(obs, height, acs, rewards, next_obs, terminals):
+def Path_climb(obs, acs, rewards, next_obs, terminals, height, goal_reward):
     """
     Take info (separate arrays) from a single rollout
     and return it in a single dictionary
@@ -212,10 +272,11 @@ def Path_height(obs, height, acs, rewards, next_obs, terminals):
     return {
         "observation": np.array(obs, dtype=np.float32),
         "reward": np.array(rewards, dtype=np.float32),
-        "height": np.array(height, dtype=np.float32),
         "action": np.array(acs, dtype=np.float32),
         "next_observation": np.array(next_obs, dtype=np.float32),
         "terminal": np.array(terminals, dtype=np.float32),
+        "height": np.array(height, dtype=np.float32),
+        "goal_reward": np.array(goal_reward, dtype=np.float32),
     }
 
 

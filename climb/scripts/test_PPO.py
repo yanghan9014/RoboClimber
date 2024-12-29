@@ -5,8 +5,9 @@ import numpy as np
 import torch
 
 from gymnasium.wrappers import RecordVideo
-from climb.agents.ppo import PPOAgent
+from climb.agents.ppo_agent import PPOAgent
 from climb.infrastructure.rl_trainer import RL_Trainer
+from climb.infrastructure.utils import PiecewiseSchedule, ConstantSchedule
 
 class PPO_Trainer(object):
 
@@ -41,6 +42,15 @@ class PPO_Trainer(object):
             'clip_range': params['clip_range'],
             'clip_range_vf': params['clip_range_vf'],
             'normalize_value_est': params['normalize_value_est'],
+
+            'num_exploration_steps': params['num_exploration_steps'],
+            'explore_weight_schedule': params['explore_weight_schedule'],
+            'exploit_weight_schedule': params['exploit_weight_schedule'],
+            'exploit_rew_shift': params['exploit_rew_shift'],
+            'exploit_rew_scale': params['exploit_rew_scale'],
+            'rnd_output_size': params['rnd_output_size'],
+            'rnd_n_layers': params['rnd_n_layers'],
+            'rnd_size': params['rnd_size'],
         }
 
         agent_params = {**computation_graph_args, **estimate_advantage_args, **train_args}
@@ -67,11 +77,20 @@ def main():
     parser.add_argument('--env_name', type=str, default='Humanoid-v5')
     parser.add_argument('--xml_file', type=str, default=None)
     parser.add_argument('--keyframe', type=str, default=None)
+    parser.add_argument('--rand_start_keyframe', action='store_true')
     parser.add_argument('--ep_len', type=int, default=1000)
     parser.add_argument('--max_training_timesteps', type=int, default=1000)
     parser.add_argument('--exp_name', type=str, default='todo')
     parser.add_argument('--policy_updates_per_rollout', type=int, default=5)
     parser.add_argument('--critic_updates_per_policy_update', type=int, default=1)
+    parser.add_argument('--rnd', action='store_true')
+    parser.add_argument('--num_exploration_steps', type=int, default=1000000)
+    parser.add_argument('--rnd_output_size', type=int, default=5)
+    parser.add_argument('--rnd_n_layers', type=int, default=2)
+    parser.add_argument('--rnd_size', type=int, default=400)
+
+    parser.add_argument('--exploit_rew_shift', type=float, default=0.0)
+    parser.add_argument('--exploit_rew_scale', type=float, default=1.0)
 
     parser.add_argument('--eval_batch_size', '-b', type=int, default=1000) 
     parser.add_argument('--eval_traj_n', type=int, default=10) 
@@ -110,6 +129,11 @@ def main():
     # note that, to avoid confusion, you don't even have a train_batch_size argument anymore (above)
     params['train_batch_size'] = params['batch_size']
 
+
+    params['explore_weight_schedule'] = PiecewiseSchedule([(0,1), (params['num_exploration_steps'], 0)], outside_value=0.0)
+    params['exploit_weight_schedule'] = ConstantSchedule(1.0)
+    params['learning_starts'] = 2000
+
     ##################################
     ### CREATE DIRECTORY FOR LOGGING
     ##################################
@@ -119,7 +143,9 @@ def main():
     if not (os.path.exists(data_path)):
         os.makedirs(data_path)
 
-    if args.keyframe is not None:
+    if args.rand_start_keyframe:
+        logdir = args.exp_name + '_' + args.env_name + '_rand-start_' + time.strftime("%d-%m-%Y_%H-%M-%S")
+    elif args.keyframe is not None:
         logdir = args.exp_name + '_' + args.env_name + '_' + args.keyframe + '_' + time.strftime("%d-%m-%Y_%H-%M-%S")
     else:
         logdir = args.exp_name + '_' + args.env_name + '_' + time.strftime("%d-%m-%Y_%H-%M-%S")
